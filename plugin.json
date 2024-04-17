@@ -1,0 +1,36 @@
+{
+	"logo": "logo.png",
+	"main": "index.html",
+	"preload": "preload.js",
+	"name": "ocr-template",
+	"version": "1.0.0",
+	"pluginName": "ocr-template",
+	"description": "按模板ocr识别",
+	"author": "empyrealtear",
+	"homepage": "",
+	"features": [
+		{
+			"code": "main",
+			"explain": "ocr识别图片，并批量修改文件名",
+			"cmds": [
+				"ocrs"
+			]
+		},
+		{
+			"code": "ocr-image",
+			"explain": "识别并重命名",
+			"cmds": [
+				{
+					"type": "files",
+					"label": "识别并重命名",
+					"fileType": [
+						"file",
+						"directory"
+					],
+					"match": "/\\.(jpg|png|pdf)$/i",
+					"minLength": 1
+				}
+			]
+		}
+	]
+}
