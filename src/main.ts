@@ -6,9 +6,7 @@ import 'element-plus/dist/index.css'
 import JsonExcel from "vue-json-excel3"
 
 
-
 const app = createApp(App)
 app.component("downloadExcel", JsonExcel)
 app.use(ElementPlus)
 app.mount('#app')
-

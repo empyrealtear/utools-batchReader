@@ -3,8 +3,10 @@
 
 // https://www.u.tools/docs/developer/api.html#%E7%AA%97%E5%8F%A3%E4%BA%A4%E4%BA%92
 const fs = require('fs')
+const nj = require('numjs')
 
 window.api = {
-    fs: fs
+    fs: fs,
+    nj: nj
 }
 console.log('成功加载preload.js')
