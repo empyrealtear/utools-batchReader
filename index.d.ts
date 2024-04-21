@@ -1,12 +1,11 @@
 export interface ProcessVersions {
-    node: () => string;
-    chrome: () => string;
-    electron: () => string;
+  node: () => string;
+  chrome: () => string;
+  electron: () => string;
 }
 
 declare global {
-    interface Window {
-      versions: ProcessVersions;
-    }
+  interface Window {
+    versions: ProcessVersions;
   }
-   
+}

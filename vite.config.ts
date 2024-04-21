@@ -17,15 +17,8 @@ export default defineConfig(({ command, mode }) => {
 	const sourcemap = isServe || !!process.env.VSCODE_DEBUG
 	return {
 		base: './',
-		// define: {
-		// 	global: 'window'
-		// },
 		// optimizeDeps: {
-		// 	esbuildOptions: {
-		// 		define: {
-		// 			global: 'globalThis'
-		// 		}
-		// 	}
+		// 	include: ['jquery']
 		// },
 		plugins: [
 			vue(),

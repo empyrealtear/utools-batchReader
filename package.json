@@ -8,16 +8,16 @@
   "scripts": {
     "dev": "vite",
     "dev:electron": "vite --mode=electron",
-    "build": "vue-tsc && vite build",
-    "build:electron": "vue-tsc && vite build  --mode=electron && electron-builder",
+    "build": "vite build",
+    "build:electron": "vite build  --mode=electron && electron-builder",
     "preview": "vite preview"
   },
   "dependencies": {
     "@qc2168/vite-plugin-utools": "^1.3.1",
     "@techstark/opencv-js": "^4.9.0-release.3",
     "element-plus": "^2.5.3",
-    "numjs": "^0.16.1",
-    "pdfjs-dist": "2.8.335",
+    "jquery": "^3.7.1",
+    "pdfjs-dist": "2.9.359",
     "tesseract.js": "^5.0.4",
     "vite-plugin-top-level-await": "^1.4.1",
     "vue": "^3.3.9",

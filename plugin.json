@@ -2,27 +2,28 @@
 	"logo": "logo.png",
 	"main": "index.html",
 	"preload": "preload.js",
-	"name": "ocr-template",
+	"name": "batchReader",
 	"version": "1.0.0",
-	"pluginName": "ocr-template",
-	"description": "按模板ocr识别",
+	"pluginName": "batchReader",
+	"description": "识别文件，并提取内容",
 	"author": "empyrealtear",
-	"homepage": "",
+	"homepage": "https://github.com/empyrealtear",
 	"features": [
 		{
 			"code": "main",
-			"explain": "ocr识别图片，并批量修改文件名",
+			"explain": "识别文件，并提取内容",
 			"cmds": [
-				"ocrs"
+				"reader",
+				"rd"
 			]
 		},
 		{
-			"code": "ocr-image",
-			"explain": "识别并重命名",
+			"code": "ReaderFile",
+			"explain": "读取文件",
 			"cmds": [
 				{
 					"type": "files",
-					"label": "识别并重命名",
+					"label": "读取文件",
 					"fileType": [
 						"file",
 						"directory"

@@ -1,14 +1,12 @@
 <template>
-  <div id="app">
-    <el-container>
-      <el-main>
-        <HomeVue />
-      </el-main>
-    </el-container>
-  </div>
+  <el-container>
+    <el-main>
+      <HomeVue />
+    </el-main>
+  </el-container>
 </template>
 
-<script>
+<script lang="ts">
 import HomeVue from './components/Home.vue';
 
 export default {
