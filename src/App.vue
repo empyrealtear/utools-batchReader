@@ -1,6 +1,6 @@
 <template>
   <el-container>
-    <el-main>
+    <el-main style="padding: 0px;">
       <HomeVue />
     </el-main>
   </el-container>

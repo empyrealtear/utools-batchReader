@@ -1,90 +1,128 @@
 <template>
-	<el-space alignment="center" :style="{ 'margin': '10px' }">
-		<el-upload ref="uploadRef" action="#" multiple :auto-upload="true" :file-list="fileLists" :show-file-list="false"
-			:before-remove="beforeFilesRemove" :on-change="handleChange" :http-request="uploadFilesXhr">
-			<el-button type="primary" round>上传文件</el-button>
-		</el-upload>
-		<el-button type="primary" @click="renameFiles" round>重命名</el-button>
-		<el-button type="primary" round>打开设置</el-button>
-		<download-excel :fields="exportDataHeader()" :fetch="fetchTableData" :name='`exportdata.xlsx`' stringifyLongNum
-			style="display: inline-flex;margin-left: 12px;">
-			<el-button type="primary" round>导出表格</el-button>
-		</download-excel>
-	</el-space>
 	<!-- <div>
 		<canvas id="pdfpreview" />
-	</div>
-	<div>
-		<img id="imgpreview_1" :style="{ 'width': `${Math.round((screenSize.width - 60) / 3)}px`, 'margin': '2px' }" />
-		<img id="imgpreview_2" :style="{ 'width': `${Math.round((screenSize.width - 60) / 3)}px`, 'margin': '2px' }" />
-		<img id="imgpreview_3" :style="{ 'width': `${Math.round((screenSize.width - 60) / 3)}px`, 'margin': '2px' }" />
 	</div> -->
-	<el-space>
-		<el-table :data="tableData" :size="screenSize.height < 500 ? 'small' : 'default'" :height="screenSize.height - 100"
-			:style="{ 'width': `${screenSize.width - 50}px` }" border stripe highlight-current-row
-			:header-cell-style="{ 'text-align': 'center' }" :summary-method="getSum" show-summary>
-			<el-table-column type="expand" key="expand" width="30" align="center">
-				<template #default="props">
-					<el-form :size="screenSize.height < 500 ? 'small' : 'default'" label-position="right"
-						label-width="100px" :style="{ 'max-width': `${screenSize.width - 70}px` }" label-suffix="：">
-						<el-form-item label="路径">
-							<el-input :value="props.row.path">
-								<template #prefix>
-									<el-image style="width: 12px; height: 12px"
-										:src="props.row.element.canvas.toDataURL('image/jpg')" fit="cover" loading="lazy"
-										:preview-src-list="props.row.element.srcList" preview-teleported />
-								</template>
-							</el-input>
-						</el-form-item>
-						<el-form-item label="表外">
-							<el-input type="textarea" autosize :value="props.row._text.value"></el-input>
-						</el-form-item>
-						<el-form-item v-for="(val, i) in props.row._cells" :key="i" :label="val.label">
-							<el-input style="width: 100%" :value="val.value">
-								<template #prefix>
-									<el-image style="width: 12px; height: 12px" :src="val.src" fit="cover" loading="lazy"
-										:preview-src-list="[val.src]" preview-teleported />
-								</template>
-							</el-input>
-						</el-form-item>
-					</el-form>
-				</template>
-			</el-table-column>
-			<el-table-column key="path" type="selection" width="38" align="center" />
-			<el-table-column key="oldname" prop="oldname" label="旧文件名" min-width="300" sortable />
-			<el-table-column key="pageNo" prop="pageNo" label="页码" width="50" align="center" />
-			<el-table-column key="more" label="识别结果" show-overflow-tooltip>
-				<el-table-column v-for="(item,) in tableHead" :key="item.id" :prop="item.id" :label="item.label"
-					:align="item.align ?? 'left'" :width="item.width ?? 150">
+	<el-tabs model-value="Data" stretch>
+		<el-tab-pane label="票据信息" name="Data">
+			<el-table :data="tableData" :size="screenSize.height < 500 ? 'small' : 'default'"
+				:height="screenSize.height - 150" :style="{ 'width': `${screenSize.width - 50}px` }" border stripe
+				highlight-current-row :header-cell-style="{ 'text-align': 'center' }" :summary-method="getSum" show-summary>
+				<el-table-column type="expand" key="expand" width="30" align="center" fixed>
 					<template #default="props">
-						{{ item.render(props) }}
+						<el-form :size="screenSize.height < 500 ? 'small' : 'default'" label-position="right"
+							label-width="100px" :style="{ 'max-width': `${screenSize.width - 70}px` }" label-suffix="：">
+							<el-form-item label="路径">
+								<el-input :value="props.row.path">
+									<template #prefix>
+										<el-image style="width: 20px; height: 20px"
+											:src="props.row.element.canvas.toDataURL('image/jpg')" fit="cover"
+											loading="lazy" :preview-src-list="props.row.element.srcList"
+											preview-teleported />
+									</template>
+								</el-input>
+							</el-form-item>
+							<el-form-item label="表外">
+								<el-input type="textarea" autosize :value="props.row._text.value"></el-input>
+							</el-form-item>
+							<el-form-item v-for="(v, i) in props.row._cells" :key="i" :label="v.label">
+								<el-input type="textarea" autosize :value="v.value"></el-input>
+							</el-form-item>
+						</el-form>
 					</template>
 				</el-table-column>
-			</el-table-column>
-		</el-table>
-	</el-space>
+				<el-table-column key="path" type="selection" width="38" align="center" fixed />
+				<el-table-column key="oldname" prop="oldname" label="旧文件名" min-width="300" sortable fixed
+					show-overflow-tooltip />
+				<el-table-column key="newname" prop="newname" label="新文件名" min-width="300" sortable fixed
+					show-overflow-tooltip>
+					<template #default="props">
+						{{ newName(props) }}
+					</template>
+				</el-table-column>
+				<el-table-column key="pageNo" prop="pageNo" label="页码" width="50" align="center" fixed
+					show-overflow-tooltip />
+				<el-table-column key="more" label="结果">
+					<el-table-column v-for="(item,) in tableHead" :key="item.id" :prop="item.id" :label="item.label"
+						:align="item.align ?? 'left'" :width="item.width ?? 150"
+						:show-overflow-tooltip="item.tooltip ?? true">
+						<template #default="props">
+							{{ item.render(props) }}
+						</template>
+					</el-table-column>
+				</el-table-column>
+			</el-table>
+			<el-space alignment="center" :style="{ 'margin-top': '10px' }">
+				<el-upload ref="uploadRef" action="#" multiple :auto-upload="true" :file-list="fileLists"
+					:show-file-list="false" :before-remove="beforeFilesRemove" :on-change="handleChange"
+					:http-request="uploadFilesXhr">
+					<el-button type="primary" round>读取文件</el-button>
+				</el-upload>
+				<el-button type="primary" @click="renameFiles" round>另存文件</el-button>
+				<download-excel :fields="exportDataHeader()" :fetch="fetchTableData" type="csv" :name='`exportdata.xls`'
+					stringifyLongNum>
+					<el-button type="primary" round>导出表格</el-button>
+				</download-excel>
+			</el-space>
+		</el-tab-pane>
+		<!-- <el-tab-pane label="参数设置" name="GlobalSetting">
+			<div :style="{ 'width': `${screenSize.width - 50}px`, 'height': `${screenSize.height - 150}px` }">
+				<el-form label-suffix="：" label-position="right" label-width="100">
+					<el-form-item label="编辑器主题">
+						<el-select v-model="ScriptSetting.theme" placeholder="请选择界面主题">
+							<el-option label="明亮模式(Visual Studio)" value="vs" />
+							<el-option label="暗黑模式(Visual Studio Dark)" value="vs-dark" />
+							<el-option label="深黑模式(High Contrast Dark)" value="hc-black" />
+						</el-select>
+					</el-form-item>
+					<el-form-item label="渲染间隔">
+						<el-input placeholder="请输入">
+							<template #append>
+								<el-select value="1" placeholder="单位" style="width: 115px">
+									<el-option label="毫秒" value="1" />
+									<el-option label="秒" value="100" />
+								</el-select>
+							</template>
+						</el-input>
+					</el-form-item>
+					<el-form-item label="行扩展显示">
+						<el-switch />
+					</el-form-item>
+				</el-form>
+			</div>
+			<el-space alignment="center" :style="{ 'margin-top': '10px' }">
+				<el-button type="primary" @click="" round>保存修改</el-button>
+				<el-button type="primary" @click="" round>取消修改</el-button>
+			</el-space>
+		</el-tab-pane> -->
+		<el-tab-pane label="脚本设置" name="ScriptSetting">
+			<monacoEditor v-model="ScriptSetting.value" :language="ScriptSetting.language" :style="{ 'text-align': 'left' }"
+				:width="`${screenSize.width - 50}px`" :height="`${screenSize.height - 150}px`" v-bind:theme="ScriptSetting.theme"
+				@editor-mounted="ScriptSetting.editorMounted" @change="handleEditorChange" />
+			<el-space alignment="center" :style="{ 'margin-top': '10px' }">
+				<el-button type="primary" @click="ScriptSetting.btnFunctions.save" round>保存</el-button>
+				<el-button type="primary" @click="ScriptSetting.btnFunctions.cancel" round>取消</el-button>
+				<el-button type="primary" @click="ScriptSetting.btnFunctions.reset" round>重置</el-button>
+				<el-button type="primary" @click="ScriptSetting.btnFunctions.delete" round>删除</el-button>
+			</el-space>
+		</el-tab-pane>
+	</el-tabs>
 </template>
 
 <script lang="ts">
 // import Tesseract from 'tesseract.js'
+import { ref } from 'vue'
+import $ from 'jquery'
 import type { UploadRequestOptions } from 'element-plus'
 import cv from '@techstark/opencv-js'
-// import * as PDFJS from 'pdfjs-dist/legacy/build/pdf.mjs'
 import * as PDFJS from 'pdfjs-dist'
+import { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/display/api'
 PDFJS.GlobalWorkerOptions.workerSrc = 'static/pdfjs/pdf.worker.js'
 
-const __debug__ = false
-const Debug = {
-	log: (...param: any) => {
-		if (__debug__)
-			console.log(param)
-	},
-	exec: (callback: Function) => {
-		if (__debug__)
-			callback()
-	}
-}
+import * as monaco from 'monaco-editor'
+import monacoEditor from './monacoEditor.vue'
 
+import { Splitpanes, Pane } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
 const sleep = (time: number) => {
 	return new Promise((resolve) => {
 		setTimeout(() => {
@@ -131,6 +169,7 @@ class ImgUtils {
 		let blur = this.toBlur(this.gray)
 		this.binary = this.toBinary(blur)
 		blur.delete()
+		// cv.imshow('pdfpreview', this.binary)
 		// document.getElementById('imgpreview_1')?.setAttribute('src', ImgUtils.toDataURL(this.raw))
 	}
 
@@ -143,7 +182,6 @@ class ImgUtils {
 		let dst = new cv.Mat()
 		let ksize = new cv.Size(3, 3)
 		cv.GaussianBlur(src, dst, ksize, 0, 0, cv.BORDER_DEFAULT)
-
 		return dst
 	}
 	toBinary(src: cv.Mat) {
@@ -237,10 +275,10 @@ class ImgUtils {
 			if (area > 50 * scale && ImgUtils.IsApproxReactangle(approx, dataframe)) {
 				filteredContours.push_back(contour)
 				let p = {
-					x0: dataframe[0][0] - 2,
-					y0: dataframe[0][1] - 2,
-					x1: dataframe[3][0] + 2,
-					y1: dataframe[3][1] + 2,
+					x0: dataframe[0][0] - 1,
+					y0: dataframe[0][1] - 1,
+					x1: dataframe[3][0] + 1,
+					y1: dataframe[3][1] + 1,
 				}
 				rects.push({
 					pos: p,
@@ -249,17 +287,22 @@ class ImgUtils {
 			}
 			approx.delete()
 		}
+		rects = rects.sort((a, b) => Math.abs(a.pos.y0 - b.pos.y0) < 3 ?
+			Math.abs(a.pos.x0 - b.pos.x0) < 3 ?
+				0 : a.pos.x0 - b.pos.x0 : a.pos.y0 - b.pos.y0
+		)
 
-		let dst = new cv.Mat.zeros(src.raw.rows, src.raw.cols, cv.CV_8UC3)
-		cv.drawContours(dst, contours, -1, new cv.Scalar(0, 255, 0), 3)
-		cv.drawContours(dst, filteredContours, -1, new cv.Scalar(0, 255, 0), 3)
+		// let dst = new cv.Mat.zeros(src.raw.rows, src.raw.cols, cv.CV_8UC3)
+		let dst = src.raw.clone()
+		// cv.drawContours(dst, contours, -1, new cv.Scalar(255, 255, 255), 3)
+		cv.drawContours(dst, filteredContours, -1, new cv.Scalar(255, 255, 255), 2)
 
 		let srcList = {
 			raw: ImgUtils.toDataURL(src.raw),
 			// gray: ImgUtils.toDataURL(src.gray),
 			// binary: ImgUtils.toDataURL(src.binary),
 			// mask: ImgUtils.toDataURL(mask, true),
-			// contours: ImgUtils.toDataURL(dst, true),
+			contours: ImgUtils.toDataURL(dst, true),
 		}
 
 		row_lines.delete()
@@ -270,22 +313,19 @@ class ImgUtils {
 
 		return {
 			srcList: srcList,
-			rects: rects.sort((a, b) => Math.abs(a.pos.y0 - b.pos.y0) < 3 ?
-				Math.abs(a.pos.x0 - b.pos.x0) < 3 ?
-					0 : a.pos.x0 - b.pos.x0 : a.pos.y0 - b.pos.y0
-			)
+			rects: rects
 		}
 	}
 	static IsApproxReactangle(approx: cv.Mat, dataframe: any) {
 		let count = approx.rows
 		let points = [...approx.data32S]
 		if (count < 4) {
-			Debug.log("轮廓不是矩形，顶点数量少于4", dataframe)
+			// console.log("轮廓不是矩形，顶点数量少于4", dataframe)
 			return false
 		}
 
 		if (count > 4) {
-			Debug.log("轮廓可能不是矩形，顶点数量超过4", dataframe)
+			// console.log("轮廓可能不是矩形，顶点数量超过4", dataframe)
 			return false
 		}
 
@@ -313,7 +353,7 @@ class ImgUtils {
 		let dmin = incline(lens[0] - lens[2], lens[1] - lens[3])
 		let dmax = incline(Math.max(lens[0], lens[2]), Math.max(lens[1], lens[3]))
 		if (dmin / dmax > 0.1) {
-			Debug.log("轮廓不是矩形，边的长度差异太大", lens)
+			// console.log("轮廓不是矩形，边的长度差异太大", lens)
 			return false
 		}
 
@@ -328,10 +368,65 @@ class ImgUtils {
 			)))
 		}
 		if (angs.some(v => Math.abs(v - 90) > 10)) {
-			Debug.log("轮廓不是矩形，夹角差异直角太大", angs)
+			// console.log("轮廓不是矩形，夹角差异直角太大", angs)
 			return false
 		}
 		return true
+	}
+	static recognizeWordsLine(src: cv.Mat) {
+		let arr: number[] = []
+		for (let r = 0; r < src.rows; r++) {
+			for (let c = 0; c < src.cols; c++) {
+				if (src.ptr(r, c) > 0) {
+					arr[r] = (arr[r] ?? 0) + 1
+				}
+			}
+		}
+		return arr
+	}
+	static otsuThreshold(pixels: number[]) {
+		let sumB = 0
+		let wB = 0
+		let wF = 0
+		let mB, mF
+		let max = 0
+		let betweenSum = 0
+		let threshold = 0
+		let count = pixels.length
+
+		// 计算直方图
+		const histogram = new Array(Math.max(...pixels)).fill(0)
+		for (let i = 0; i < count; i++) {
+			histogram[pixels[i]]++
+		}
+
+		// 计算总和
+		let totalSum = 0
+		for (let i = 0; i < histogram.length; i++) {
+			totalSum += i * histogram[i]
+		}
+
+		// 计算类间方差
+		for (let i = 0; i < histogram.length; i++) {
+			wB += histogram[i] // 背景像素权重
+			if (wB === 0)
+				continue
+			wF = count - wB // 前景像素权重
+			if (wF === 0)
+				break
+			sumB += i * histogram[i] // 背景像素和
+			mB = sumB / wB // 背景像素均值
+			mF = (totalSum - sumB) / wF // 前景像素均值
+			// 计算类间方差  
+			betweenSum = wB * wF * Math.pow(mB - mF, 2)
+			// 如果当前类间方差大于之前的最大值，则更新阈值和最大值
+			if (betweenSum >= max) {
+				max = betweenSum
+				threshold = i
+			}
+		}
+
+		return threshold
 	}
 }
 
@@ -342,16 +437,16 @@ class PDFUtils {
 	constructor() {
 	}
 
-	static groupbyRow(arr: any[]) {
+	static groupbyRow(arr: any[], scale = 1) {
 		let texts = [...(arr ?? [])]
 		if (texts.length == 0)
-			return { texts: texts, groups: {} }
-		let count = 1
+			return []
+		let count = 0
 		texts[0].row = count
 		for (let i = 1; i < texts.length; i++) {
 			let a = texts[i - 1]
 			let b = texts[i]
-			if (Math.abs(a.center.y - b.center.y) > Math.max(a.height, b.height)) {
+			if (Math.abs(a.center.y - b.center.y) > Math.max(a.height, b.height) * scale) {
 				count++
 			}
 			texts[i].row = count
@@ -361,16 +456,13 @@ class PDFUtils {
 				acc[v.row] = []
 			acc[v.row].push(v)
 			return acc
-		}, {})
+		}, [])
 		for (let k in groups)
 			groups[k] = groups[k].sort((a: any, b: any) => a.x - b.x)
-		return {
-			texts: texts,
-			groups: groups
-		}
+		return groups
 	}
 
-	static async toCanvas(page: PDFJS.PDFPageProxy, scale = 1) {
+	static async toCanvas(page: PDFPageProxy, scale = 1) {
 		let canvas = document.createElement('canvas')
 		// let canvas = document.getElementById('pdfpreview')
 		let context = canvas.getContext('2d')
@@ -385,7 +477,7 @@ class PDFUtils {
 			viewport: viewport
 		})
 
-		await sleep(200)
+		await sleep(300)
 		return {
 			canvas: canvas,
 			viewport: viewport,
@@ -393,13 +485,13 @@ class PDFUtils {
 		}
 	}
 
-	static async readPDFPage(doc: PDFJS.PDFDocumentProxy, pageNo: number, scale = 1) {
+	static async readPDFPage(doc: PDFDocumentProxy, pageNo: number, scale = 1) {
 		let page = await doc.getPage(pageNo)
 		let { canvas, viewport } = await PDFUtils.toCanvas(page, scale)
 
 		// 获取文本内容并排序
 		let tokenizedText = await page.getTextContent()
-		let pageText = tokenizedText.items.map((token: any) => {
+		let pageText = tokenizedText.items.filter((v: any) => v.str.trim().length > 0).map((token: any) => {
 			let tr = PDFJS.Util.transform(
 				PDFJS.Util.transform(viewport.transform, token.transform),
 				[1, 0, 0, -1, 0, 0]
@@ -408,23 +500,23 @@ class PDFUtils {
 			let width = token.width / 72 * 2.54 * 10
 			let height = token.height / 72 * 2.54 * 10
 			return {
-				str: token.str,
-				x: Math.round(xt * 100) / 100,
-				y: Math.round(yt * 100) / 100,
-				width: Math.round(width * 100) / 100,
-				height: Math.round(height * 100) / 100,
+				str: token.str.trim(),
+				x: Math.round(xt * 10) / 10,
+				y: Math.round(yt * 10) / 10,
+				width: Math.round(width * 10) / 10,
+				height: Math.round(height * 10) / 10,
 				center: {
-					x: Math.round((xt + width / 2) * 100) / 100,
-					y: Math.round((yt + height / 2) * 100) / 100
+					x: Math.round((xt + width / 2) * 10) / 10,
+					y: Math.round((yt + height / 2) * 10) / 10
 				},
 				src: token,
-				tr: tr,
+				transform: tr,
 			}
 		}).sort((a: any, b: any) => {
 			let y0_max = Math.max(a.y, b.y)
 			let y1_min = Math.min(a.y + a.width, b.y + b.width)
 			if (Math.abs(a.center.y - b.center.y) <= Math.min(a.height, b.height)) {
-				if ((y1_min - y0_max) / (Math.max(a.width, b.width)) > 0.5)
+				if ((y1_min - y0_max) / (Math.max(a.width, b.width)) >= 0.5)
 					return a.x - b.x // 按列排序
 				else if (Math.abs(a.height - b.height) > Math.min(a.height, b.height))
 					return b.height - a.height // 按字号排序
@@ -433,6 +525,10 @@ class PDFUtils {
 						Math.pow(b.center.y, 2) * Math.pow(b.x, 2) // 按原点距离排序
 			}
 			return a.y - b.y // 按行排序
+		}).filter((v, i, arr) => {
+			if (i == 0)
+				return true
+			return ['x', 'y', 'str'].some(x => arr[i - 1][x] != v[x])
 		})
 		// 通过表格框线分割单元格内文本内容
 		let img = new ImgUtils(canvas)
@@ -449,32 +545,29 @@ class PDFUtils {
 				return false
 			}).some(v => v)
 		})
-		
 
-		let cells = rects.map((v, i) => ({
-			texts: textRange[i],
-			groups: [],
-			// ...PDFUtils.groupbyRow(textRange[i]),
-			// src: ImgUtils.toDataURL(img.raw.roi(v.rect), true),
-			src: '',
-			range: v.pos
-		}))
+
+		let cells = rects.map((v, i) => {
+			return {
+				texts: PDFUtils.groupbyRow(textRange[i], scale),
+				src: '',
+				// src: ImgUtils.toDataURL(img.raw.roi(v.rect), true),
+				range: v.pos
+			}
+		})
 		img.delete()
-		console.log(cells)
 
 		return {
 			pageNo: pageNo,
 			element: { canvas: canvas, scale: scale, srcList: Object.values(srcList) },
 			pageText: pageText,
-			rangeText: { texts: outRange, cells: cells }
-			// rangeText: { texts: PDFUtils.groupbyRow(outRange), cells: cells }
+			rangeText: { texts: PDFUtils.groupbyRow(outRange, scale), cells: cells }
 		}
 	}
 
-	static async readPDFDoc(file: any, resolve: Function) {
-		console.log(file)
+	static async readPDFDoc(url: any, resolve: Function) {
 		PDFJS.getDocument({
-			url: file,
+			url: url,
 			// data: data,
 			cMapUrl: PDFUtils.CMAP_URL,
 			cMapPacked: PDFUtils.CMAP_PACKED
@@ -486,28 +579,44 @@ class PDFUtils {
 		}).catch((err) => {
 			console.error(err)
 		})
+	}
 
-		// let doc = await PDFJS.getDocument({
-		// 	url: file,
-		// 	// data: data,
-		// 	cMapUrl: PDFUtils.CMAP_URL,
-		// 	cMapPacked: PDFUtils.CMAP_PACKED
-		// }).promise
-		// console.log(doc)
-		// let pageTextPromises = []
-		// for (let pageNo = 1; pageNo <= doc.numPages; pageNo++)
-		// 	pageTextPromises.push(PDFUtils.readPDFPage(doc, pageNo, 1))
-		// let pageTexts = await Promise.all(pageTextPromises)
-		// doc.destroy()
-		// pageTexts.map((v) => resolve(v))
+	static async mergePDF(...pages: PDFPageProxy[]) {
+		return pages
+	}
+
+	static async splitPDF(doc: PDFDocumentProxy) {
+		return doc
 	}
 }
 
 const fileUrl: any = {}
+var computedFields = {
+	tableHead: () => {
+		return [
+			{
+				id: 'text',
+				label: '全文',
+				align: 'center',
+				width: 200,
+				tooltip: false,
+				render: (props: any) => props.row._text.value
+			}
+		]
+	},
+	newName: (prop: any) => {
+		return prop.row.oldname
+	}
+}
+
 export default {
 	name: 'Home',
+	components: {
+		monacoEditor,
+		Splitpanes,
+		Pane
+	},
 	data() {
-		console.clear()
 		window.onresize = () => {
 			this.screenSize = {
 				width: window.innerWidth,
@@ -518,98 +627,12 @@ export default {
 		if (window.utools != null) {
 			utools.onPluginEnter((param: any) => {
 				let { code, type, payload, option } = param
-				console.log(param)
-				Debug.log(code, type, payload, option)
+				// console.log(param)
+				// console.log(code, type, payload, option)
 				if (type == 'files')
 					this.parseFiles(payload)
 			})
 		}
-
-		let tableComputedFields = [
-			{
-				id: 'invoiceId',
-				label: '发票号码',
-				align: 'center',
-				width: 200,
-				render: (props: any) => {
-					const { row } = props
-					return /发票号码[:：](?<id>[0-9]+)/g.exec(row._text.value)?.groups?.id
-				},
-			},
-			{
-				id: 'amount',
-				label: '发票金额',
-				align: 'right',
-				render: (props: any) => {
-					const { row } = props
-					let calc = (row: any) => {
-						let match = row._cells.find((v: any) => /小写.¥([0-9.]+)$|¥([0-9.]+).小写.$/g.test((v.value ?? '').trim()))
-						return parseFloat(match?.value?.replace(/[^-0-9.]+/g, ''))
-					}
-					return calc(row).toFixed(2)
-				},
-				total: (param: any) => {
-					const { data } = param
-					let calc = (row: any) => {
-						let match = row._cells.find((v: any) => /小写.¥([0-9.]+)$|¥([0-9.]+).小写.$/g.test((v.value ?? '').trim()))
-						return parseFloat(match?.value?.replace(/[^-0-9.]+/g, ''))
-					}
-					return (data.map((row: any) => calc(row)).reduce((acc: any[], cur: any) => cur + acc, 0)).toFixed(2)
-				}
-			},
-			{
-				id: 'buyer',
-				label: '购方名称',
-				render: (props: any) => {
-					const { row } = props
-					let index = row._cells.findIndex((v: any) => /^购\n?买.*/g.test((v.value ?? '').trim()))
-					let texts = row._cells[index + 1]?.groups
-					if (index != -1)
-						return Object.entries(texts ?? {})
-							.map(([, v]: any[]) => v.map((x: any) => x.str.trim()).join(''))
-							.find((v) => /名.*[:：]/g.test(v))?.replace(/^.*[:：]/g, '')
-				},
-			},
-			{
-				id: 'buyerId',
-				label: '纳税人识别号',
-				render: (props: any) => {
-					const { row } = props
-					let index = row._cells.findIndex((v: any) => /^购\n?买.*/g.test((v.value ?? '').trim()))
-					let texts = row._cells[index + 1]?.groups
-					if (index != -1)
-						return Object.entries(texts ?? {})
-							.map(([, v]: any[]) => v.map((x: any) => x.str.trim()).join(''))
-							.find((v) => /税.*[:：]/g.test(v))?.replace(/^.*[:：]/g, '')
-				},
-			},
-			{
-				id: 'buyerAddress',
-				label: '地址、电话',
-				render: (props: any) => {
-					const { row } = props
-					let index = row._cells.findIndex((v: any) => /^购\n?买.*/g.test((v.value ?? '').trim()))
-					let texts = row._cells[index + 1]?.groups
-					if (index != -1)
-						return Object.entries(texts ?? {})
-							.map(([, v]: any[]) => v.map((x: any) => x.str.trim()).join(''))
-							.find((v) => /地.*址.*[:：]/g.test(v))?.replace(/^.*[:：]/g, '')
-				},
-			},
-			{
-				id: 'buyerBank',
-				label: '银行账号',
-				render: (props: any) => {
-					const { row } = props
-					let index = row._cells.findIndex((v: any) => /^购\n?买.*/g.test((v.value ?? '').trim()))
-					let texts = row._cells[index + 1]?.groups
-					if (index != -1)
-						return Object.entries(texts ?? {})
-							.map(([, v]: any[]) => v.map((x: any) => x.str.trim()).join(''))
-							.find((v) => /账.*号.*[:：]/g.test(v))?.replace(/^.*[:：]/g, '')
-				},
-			},
-		]
 
 		return {
 			screenSize: {
@@ -618,7 +641,8 @@ export default {
 			},
 			fileLists: [],
 			fileUrl: {},
-			tableHead: [...tableComputedFields],
+			tableHead: computedFields.tableHead(),
+			newName: computedFields.newName,
 			tableData: [{
 				pageNo: 0,
 				page: null,
@@ -633,10 +657,70 @@ export default {
 				}],
 				_empty: true
 			}].filter((v: any) => !v._empty),
-			debug: __debug__
+			ScriptSetting: {
+				value: ref(''),
+				log: ref('初始化成功'),
+				language: 'javascript',
+				editorMounted: (editor: monaco.editor.IStandaloneCodeEditor) => { },
+				btnFunctions: {
+					read: (isdefault = false) => {
+						let exportConfig = localStorage.getItem('exportConfig')
+						if (exportConfig == null || isdefault)
+							$.ajax({
+								url: 'static/export.config.default.js',
+								async: false,
+								dataType: 'text',
+								success: (data: any) => {
+									exportConfig = data
+								}
+							})
+						if (exportConfig) {
+							this.ScriptSetting.value = exportConfig
+							eval(exportConfig)
+							this.tableHead = computedFields.tableHead()
+							this.newName = computedFields.newName
+						}
+					},
+					save: () => {
+						localStorage.setItem('exportConfig', this.ScriptSetting.value)
+						this.$message({
+							message: '配置保存完毕',
+							type: 'success'
+						})
+					},
+					cancel: () => {
+						this.ScriptSetting.btnFunctions.read()
+						this.$message({
+							message: '取消修改',
+							type: 'success'
+						})
+					},
+					reset: () => {
+						this.ScriptSetting.btnFunctions.read(true)
+						this.$message({
+							message: '重置完毕, 保存后可覆盖现配置',
+							type: 'warning'
+						})
+					},
+					delete: () => {
+						localStorage.removeItem('exportConfig')
+						this.ScriptSetting.btnFunctions.read()
+						this.$message({
+							message: '已删除并重置配置',
+							type: 'error'
+						})
+					}
+				},
+				theme: ref('vs-dark')
+			}
 		}
 	},
-	watch: {},
+	mounted() {
+		this.ScriptSetting.btnFunctions.read()
+	},
+	watch: {
+		
+	},
 	methods: {
 		recognizeText() {
 
@@ -644,6 +728,7 @@ export default {
 		exportDataHeader() {
 			let fields = {
 				"旧文件名": 'oldname',
+				"新文件名": 'newname',
 				"页码": 'pageNo',
 				"路径": 'path'
 			}
@@ -657,7 +742,10 @@ export default {
 		},
 		fetchTableData() {
 			return this.tableData.map((v, i) => {
-				let row = { ...v }
+				let row = {
+					...v,
+					'newname': this.newName({ row: row, column: col, index: i })
+				}
 				this.tableHead.forEach((col, i) => {
 					row = {
 						...row,
@@ -672,7 +760,7 @@ export default {
 		getSum(param: any) {
 			const { columns } = param
 			const sums: any[] = []
-			// Debug.log(columns, data)
+			// console.log(columns, data)
 			columns.forEach((column: any, index: number) => {
 				if (index === 2) {
 					sums[index] = '合计'
@@ -686,11 +774,9 @@ export default {
 			return sums
 		},
 		beforeFilesRemove(file: any, fileLists: any[]) {
-			Debug.log(file, fileLists)
 			return this.$confirm(`确定移除 ${file.name}？`);
 		},
 		handleChange(file: any, fileLists: any[]) {
-			Debug.log(file, fileLists)
 			if (file) {
 				fileUrl[file.uid] = URL.createObjectURL(file.raw)
 			}
@@ -718,8 +804,7 @@ export default {
 							path: item['path'],
 							oldname: item['name'],
 							_text: {
-								// value: Object.entries(e.rangeText.texts.groups)?.map((x: any[]) => x[1].map((v: any) => v.str).join('')).join('\n'),
-								value: e.rangeText.texts?.map((x: any) => x.str).join(''),
+								value: e.rangeText.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
 								texts: e.rangeText.texts,
 							},
 							_cells: e.rangeText.cells.map((v: any, i: number) => {
@@ -727,21 +812,27 @@ export default {
 								return {
 									id: name,
 									label: name,
-									// value: Object.entries(v.groups)?.map((x: any[]) => x[1].map((v: any) => v.str).join('')).join('\n'),
-									value: v.texts?.map((v: any) => v.str).join(''),
+									value: v.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
 									...v
 								}
 							}),
 							_empty: false
 						}
-						Debug.log(row._text)
+						// Debug.log(row._text)
 						this.tableData.push(row)
 					})
 				}
 			}
+		},
+		handleEditorChange(value: any) {
+			// console.log(value)
 		}
 	}
 }
 </script>
 
-<style></style>
+<style scoped>
+.el-header {
+	padding: 0 0;
+}
+</style>

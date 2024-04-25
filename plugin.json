@@ -3,9 +3,9 @@
 	"main": "index.html",
 	"preload": "preload.js",
 	"name": "batchReader",
-	"version": "1.0.0",
-	"pluginName": "batchReader",
-	"description": "识别文件，并提取内容",
+	"version": "0.0.1",
+	"pluginName": "票据小助手",
+	"description": "识别PDF电子票据，并提取内容",
 	"author": "empyrealtear",
 	"homepage": "https://github.com/empyrealtear",
 	"features": [
@@ -18,7 +18,7 @@
 			]
 		},
 		{
-			"code": "ReaderFile",
+			"code": "ReaderFiles",
 			"explain": "读取文件",
 			"cmds": [
 				{
@@ -28,7 +28,7 @@
 						"file",
 						"directory"
 					],
-					"match": "/\\.(jpg|png|pdf)$/i",
+					"match": "/\\.(pdf)$/i",
 					"minLength": 1
 				}
 			]
