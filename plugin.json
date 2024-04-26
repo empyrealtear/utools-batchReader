@@ -3,7 +3,7 @@
 	"main": "index.html",
 	"preload": "preload.js",
 	"name": "batchReader",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"pluginName": "票据小助手",
 	"description": "识别PDF电子票据，并提取内容",
 	"author": "empyrealtear",
@@ -28,7 +28,7 @@
 						"file",
 						"directory"
 					],
-					"match": "/\\.(pdf)$/i",
+					"match": "/\\.(pdf|ofd)$/i",
 					"minLength": 1
 				}
 			]

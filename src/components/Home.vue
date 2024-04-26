@@ -10,13 +10,13 @@
 				<el-table-column type="expand" key="expand" width="30" align="center" fixed>
 					<template #default="props">
 						<el-form :size="screenSize.height < 500 ? 'small' : 'default'" label-position="right"
-							label-width="100px" :style="{ 'max-width': `${screenSize.width - 70}px` }" label-suffix="：">
+							label-width="200px" :style="{ 'max-width': `${screenSize.width - 70}px` }" label-suffix="：">
 							<el-form-item label="路径">
 								<el-input :value="props.row.path">
 									<template #prefix>
 										<el-image style="width: 20px; height: 20px"
-											:src="props.row.element.canvas.toDataURL('image/jpg')" fit="cover"
-											loading="lazy" :preview-src-list="props.row.element.srcList"
+											:src="props.row.element?.canvas.toDataURL('image/jpg')" fit="cover"
+											loading="lazy" :preview-src-list="props.row.element?.srcList"
 											preview-teleported />
 									</template>
 								</el-input>
@@ -42,7 +42,7 @@
 				<el-table-column key="pageNo" prop="pageNo" label="页码" width="50" align="center" fixed
 					show-overflow-tooltip />
 				<el-table-column key="more" label="结果">
-					<el-table-column v-for="(item,) in tableHead" :key="item.id" :prop="item.id" :label="item.label"
+					<el-table-column v-for="(item,) in tableHead" :key="item.id" :label="item.label"
 						:align="item.align ?? 'left'" :width="item.width ?? 150"
 						:show-overflow-tooltip="item.tooltip ?? true">
 						<template #default="props">
@@ -57,7 +57,7 @@
 					:http-request="uploadFilesXhr">
 					<el-button type="primary" round>读取文件</el-button>
 				</el-upload>
-				<el-button type="primary" @click="renameFiles" round>另存文件</el-button>
+				<!-- <el-button type="primary" @click="renameFiles" round>另存文件</el-button> -->
 				<download-excel :fields="exportDataHeader()" :fetch="fetchTableData" type="csv" :name='`exportdata.xls`'
 					stringifyLongNum>
 					<el-button type="primary" round>导出表格</el-button>
@@ -96,13 +96,16 @@
 		</el-tab-pane> -->
 		<el-tab-pane label="脚本设置" name="ScriptSetting">
 			<monacoEditor v-model="ScriptSetting.value" :language="ScriptSetting.language" :style="{ 'text-align': 'left' }"
-				:width="`${screenSize.width - 50}px`" :height="`${screenSize.height - 150}px`" v-bind:theme="ScriptSetting.theme"
-				@editor-mounted="ScriptSetting.editorMounted" @change="handleEditorChange" />
+				:width="`${screenSize.width - 50}px`" :height="`${screenSize.height - 150}px`"
+				v-bind:theme="ScriptSetting.theme" @editor-mounted="ScriptSetting.editorMounted"
+				@change="handleEditorChange" />
 			<el-space alignment="center" :style="{ 'margin-top': '10px' }">
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.save" round>保存</el-button>
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.cancel" round>取消</el-button>
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.reset" round>重置</el-button>
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.delete" round>删除</el-button>
+				<!-- <el-button type="primary" @click="ScriptSetting.btnFunctions.import" round>导入</el-button> -->
+				<el-button type="primary" @click="ScriptSetting.btnFunctions.output" round>导出</el-button>
 			</el-space>
 		</el-tab-pane>
 	</el-tabs>
@@ -111,7 +114,9 @@
 <script lang="ts">
 // import Tesseract from 'tesseract.js'
 import { ref } from 'vue'
-import $ from 'jquery'
+import $ from 'jquery'; window['$'] = $
+import JSZIP from 'jszip'
+import { saveAs } from 'file-saver'
 import type { UploadRequestOptions } from 'element-plus'
 import cv from '@techstark/opencv-js'
 import * as PDFJS from 'pdfjs-dist'
@@ -123,6 +128,8 @@ import monacoEditor from './monacoEditor.vue'
 
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
+
+
 const sleep = (time: number) => {
 	return new Promise((resolve) => {
 		setTimeout(() => {
@@ -590,6 +597,108 @@ class PDFUtils {
 	}
 }
 
+class OFDUtils {
+	raw: Promise<JSZIP>
+	ofd: Element
+	docInfo: {}
+	tags: {}
+	pages: any[]
+
+	constructor(arraybuffer: Promise<ArrayBuffer>) {
+		let zip = new JSZIP()
+		this.raw = zip.loadAsync(arraybuffer)
+	}
+
+	then(resolve: any = (v: OFDUtils) => v) {
+		const fun = async () => {
+			this.ofd = await this.parseXml('OFD.xml')
+			this.docInfo = this.parseDocInfo(this.ofd)
+
+			let docRoot = this.ofd.getElementsByTagName('ofd:DocRoot')[0].textContent
+
+			if (docRoot) {
+				let rootDir = docRoot.replace(/[^\/]+$/g, '')
+				let pages, tags
+				let root = await this.parseXml(docRoot)
+
+				let tags_path = root.getElementsByTagName('ofd:CustomTags')[0].textContent
+				if (tags_path) {
+					let tags_xml = await this.parseXml(rootDir + tags_path)
+					let tags_dir = rootDir + tags_path?.replace(/[^\/]+$/g, '')
+					tags = Object.entries(tags_xml.getElementsByTagName('ofd:CustomTag')).map(([, v]) => tags_dir + v.textContent)
+					this.tags = await this.parseTags(tags)
+				}
+
+				pages = Object.entries(root.getElementsByTagName('ofd:Pages')[0].children)
+					.map(([, v]) => rootDir + v.getAttribute('BaseLoc'))
+				this.pages = await this.parsePages(pages)
+			}
+			return resolve(this)
+		}
+		return fun()
+	}
+
+	async parseXml(path: string) {
+		let xml: Element
+		await this.raw.then(async (zip) => {
+			await zip.files[path].async('string').then((str) => {
+				// 兼容税务UKey版式发票
+				str = str
+					.replaceAll('<:', '<ofd:')
+					.replaceAll('</:', '</ofd:')
+					.replace('xmlns:=""', 'xmlns:ofd="http://www.ofdspec.org/2016"')
+				xml = $.parseXML(str)
+			})
+		})
+		return xml
+	}
+
+	parseDocInfo(ofd: Element) {
+		return Object.entries(ofd.getElementsByTagName('ofd:DocInfo')[0].children).reduce((prev: any, [, v]) => {
+			if (v.children.length > 0) {
+				// customdatas
+				prev[v.localName] = Object.entries(v.children).reduce((dic: any, [, v]) => {
+					let name = v.getAttribute('Name') ?? v.localName
+					dic[name] = v.textContent
+					return dic
+				}, {})
+			} else {
+				// fields
+				prev[v.localName] = v.textContent
+			}
+			return prev
+		}, {})
+	}
+
+	async parseTags(tags: string[]) {
+		let res: any = {}
+		for (let v of tags) {
+			let xml = await this.parseXml(v)
+			Object.entries(xml.getElementsByTagName('ofd:ObjectRef')).map(([, v]) => {
+				if (v.parentElement && v.textContent)
+					res[v.textContent] = v.parentElement.localName
+			})
+		}
+		return res
+	}
+
+	async parsePages(pages: string[]) {
+		let arr = []
+		for (let i = 0; i < pages.length; i++) {
+			let xml = await this.parseXml(pages[i])
+			arr[i] = Object.entries(xml.getElementsByTagName('ofd:TextCode')).map(([, v]) => {
+				let id = v.parentElement?.getAttribute('ID')
+				return {
+					id: id,
+					name: this.tags[id],
+					value: v.textContent
+				}
+			})
+		}
+		return arr
+	}
+}
+
 const fileUrl: any = {}
 var computedFields = {
 	tableHead: () => {
@@ -709,6 +818,12 @@ export default {
 							message: '已删除并重置配置',
 							type: 'error'
 						})
+					},
+					import: () => {
+
+					},
+					output: () => {
+						saveAs(new Blob([localStorage.getItem('exportConfig')], { type: 'text/plain;charset=utf-8' }), 'export.config.js')
 					}
 				},
 				theme: ref('vs-dark')
@@ -719,11 +834,13 @@ export default {
 		this.ScriptSetting.btnFunctions.read()
 	},
 	watch: {
-		
+
 	},
 	methods: {
 		recognizeText() {
 
+		},
+		renameFiles() {
 		},
 		exportDataHeader() {
 			let fields = {
@@ -742,32 +859,26 @@ export default {
 		},
 		fetchTableData() {
 			return this.tableData.map((v, i) => {
-				let row = {
+				let row: any = {
 					...v,
-					'newname': this.newName({ row: row, column: col, index: i })
+					'newname': this.newName({ row: v, column: this.tableHead, index: i })
 				}
 				this.tableHead.forEach((col, i) => {
-					row = {
-						...row,
-						[col.id]: col.render({ row: row, column: col, index: i })
-					}
+					row[col.id] = col.render({ row: row, column: col, index: i })
 				})
 				return row
 			})
 		},
-		renameFiles() {
-		},
 		getSum(param: any) {
 			const { columns } = param
 			const sums: any[] = []
-			// console.log(columns, data)
 			columns.forEach((column: any, index: number) => {
 				if (index === 2) {
 					sums[index] = '合计'
 					return
 				}
-				if (/amount/.test(column.property)) {
-					let total: any = this.tableHead.find(v => v.id == column.property)?.total
+				let total: any = this.tableHead.find(v => v.id == column.rawColumnKey)?.total
+				if (total) {
 					sums[index] = total(param)
 				}
 			})
@@ -795,32 +906,60 @@ export default {
 		parseFiles(payload: any[]) {
 			for (const item of payload) {
 				if (item['isFile'] && !this.tableData.some((row: any) => row.path == item.path)) {
-					PDFUtils.readPDFDoc(item['path'].replace(/\\/g, '/'), (e: any) => {
-						console.log(e)
-						let row = {
-							pageNo: e.pageNo,
-							page: e.page,
-							element: e.element,
-							path: item['path'],
-							oldname: item['name'],
-							_text: {
-								value: e.rangeText.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
-								texts: e.rangeText.texts,
-							},
-							_cells: e.rangeText.cells.map((v: any, i: number) => {
-								let name = `Cell_${i}`
-								return {
-									id: name,
-									label: name,
-									value: v.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
-									...v
-								}
-							}),
-							_empty: false
-						}
-						// Debug.log(row._text)
-						this.tableData.push(row)
-					})
+					if (item['name'].endsWith('.pdf'))
+						PDFUtils.readPDFDoc(item['path'].replace(/\\/g, '/'), (e: any) => {
+							let row = {
+								pageNo: e.pageNo,
+								element: e.element,
+								path: item['path'],
+								oldname: item['name'],
+								type: 'pdf',
+								_text: {
+									value: e.rangeText.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
+									texts: e.rangeText.texts,
+								},
+								_cells: e.rangeText.cells.map((v: any, i: number) => {
+									let name = `Cell_${i}`
+									return {
+										id: name,
+										label: name,
+										value: v.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
+										...v
+									}
+								}),
+								_empty: false
+							}
+							this.tableData.push(row)
+						})
+					else if (item['name'].endsWith('.ofd')) {
+						fetch(item['path']).then((res) => {
+							let ofd = new OFDUtils(res.arrayBuffer())
+							ofd.then((v: OFDUtils) => {
+								v.pages.map((v, i) => {
+									let row = {
+										pageNo: i + 1,
+										element: null,
+										path: item['path'],
+										oldname: item['name'],
+										type: 'ofd',
+										_text: {
+											value: '',
+											texts: [],
+										},
+										_cells: v.map((val: any, i: number) => {
+											return {
+												id: i,
+												label: val.name,
+												value: val.value,
+											}
+										}),
+										_empty: false
+									}
+									this.tableData.push(row)
+								})
+							})
+						})
+					}
 				}
 			}
 		},
