@@ -9,3 +9,7 @@ declare global {
     versions: ProcessVersions;
   }
 }
+
+export interface ofd {
+
+}

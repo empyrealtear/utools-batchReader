@@ -1,10 +1,7 @@
 <template>
-	<!-- <div>
-		<canvas id="pdfpreview" />
-	</div> -->
 	<el-tabs model-value="Data" stretch>
 		<el-tab-pane label="票据信息" name="Data">
-			<el-table :data="tableData" :size="screenSize.height < 500 ? 'small' : 'default'"
+			<el-table ref="multipleTableRef" :data="tableData" :size="screenSize.height < 500 ? 'small' : 'default'"
 				:height="screenSize.height - 150" :style="{ 'width': `${screenSize.width - 50}px` }" border stripe
 				highlight-current-row :header-cell-style="{ 'text-align': 'center' }" :summary-method="getSum" show-summary>
 				<el-table-column type="expand" key="expand" width="30" align="center" fixed>
@@ -57,8 +54,9 @@
 					:http-request="uploadFilesXhr">
 					<el-button type="primary" round>读取文件</el-button>
 				</el-upload>
-				<!-- <el-button type="primary" @click="renameFiles" round>另存文件</el-button> -->
-				<download-excel :fields="exportDataHeader()" :fetch="fetchTableData" type="csv" :name='`exportdata.xls`'
+				<el-button type="primary" @click="removeSelectedRows" round>清空所选</el-button>
+				<el-button type="primary" @click="saveAsFiles" round>合并下载</el-button>
+				<download-excel :fields="exportDataHeader()" :fetch="fetchTableData" type="csv" :name='`exportdata.csv`'
 					stringifyLongNum>
 					<el-button type="primary" round>导出表格</el-button>
 				</download-excel>
@@ -108,596 +106,23 @@
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.output" round>导出</el-button>
 			</el-space>
 		</el-tab-pane>
+		<div id="preview-cache"></div>
 	</el-tabs>
 </template>
 
 <script lang="ts">
 // import Tesseract from 'tesseract.js'
 import { ref } from 'vue'
-import $ from 'jquery'; window['$'] = $
-import JSZIP from 'jszip'
-import { saveAs } from 'file-saver'
+import { ElTable } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import cv from '@techstark/opencv-js'
-import * as PDFJS from 'pdfjs-dist'
-import { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/display/api'
-PDFJS.GlobalWorkerOptions.workerSrc = 'static/pdfjs/pdf.worker.js'
+
+import { saveAs } from 'file-saver'
+import jsPDF from 'jspdf'
 
 import * as monaco from 'monaco-editor'
 import monacoEditor from './monacoEditor.vue'
-
-import { Splitpanes, Pane } from 'splitpanes'
-import 'splitpanes/dist/splitpanes.css'
-
-
-const sleep = (time: number) => {
-	return new Promise((resolve) => {
-		setTimeout(() => {
-			resolve(time)
-		}, time)
-	})
-}
-
-class nparray {
-	data: any[]
-	row: number
-	col: number
-
-	constructor(arr: any[]) {
-		this.data = [...arr]
-		this.row = this.data.length
-		this.col = Math.max(...(this.data.map(v => v instanceof Array ? v.length : 1)))
-	}
-
-	reshape(row: number, col: number) {
-		let newArr = []
-		for (let r = 0; r < row; r++)
-			newArr[r] = this.data.slice(r * col, (r + 1) * col)
-		return new nparray(newArr)
-	}
-
-	tolist() {
-		return [...this.data]
-	}
-
-	static array(arr: any[]) {
-		return new nparray(arr)
-	}
-}
-
-class ImgUtils {
-	raw: cv.Mat
-	gray: cv.Mat
-	binary: cv.Mat
-
-	constructor(src: any) {
-		this.raw = cv.imread(src)
-		this.gray = this.toGray(this.raw)
-		let blur = this.toBlur(this.gray)
-		this.binary = this.toBinary(blur)
-		blur.delete()
-		// cv.imshow('pdfpreview', this.binary)
-		// document.getElementById('imgpreview_1')?.setAttribute('src', ImgUtils.toDataURL(this.raw))
-	}
-
-	toGray(src: cv.Mat) {
-		let dst = new cv.Mat()
-		cv.cvtColor(src, dst, cv.COLOR_BGR2GRAY)
-		return dst
-	}
-	toBlur(src: cv.Mat) {
-		let dst = new cv.Mat()
-		let ksize = new cv.Size(3, 3)
-		cv.GaussianBlur(src, dst, ksize, 0, 0, cv.BORDER_DEFAULT)
-		return dst
-	}
-	toBinary(src: cv.Mat) {
-		let dst = new cv.Mat()
-		cv.adaptiveThreshold(src, dst, 200, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 3, 2)
-		return dst
-	}
-	delete() {
-		this.raw.delete()
-		this.gray.delete()
-		this.binary.delete()
-	}
-	static toDataURL(mat: cv.Mat, isDelete = false) {
-		let canvas = document.createElement('canvas')
-		cv.imshow(canvas, mat)
-		if (isDelete)
-			mat.delete()
-		return canvas.toDataURL('image/jpg')
-	}
-
-	static erode(src: cv.Mat, kernel: cv.Mat) {
-		let dst = new cv.Mat()
-		let anchor = new cv.Point(-1, -1)
-		cv.erode(src, dst, kernel, anchor, 1)
-		return dst
-	}
-	static dilate(src: cv.Mat, kernel: cv.Mat) {
-		let dst = new cv.Mat()
-		let anchor = new cv.Point(-1, -1)
-		cv.dilate(src, dst, kernel, anchor, 2, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue())
-		return dst
-	}
-	static where(src: cv.Mat, compare: Function) {
-		let y = []
-		let x = []
-		for (let c = 0; c < src.cols; c++) {
-			for (let r = 0; r < src.rows; r++) {
-				if (compare(src.ptr(r, c), { row: r, col: c }, src)) {
-					y.push(r)
-					x.push(c)
-				}
-			}
-		}
-		return { col: x, row: y }
-	}
-	static merge(a: cv.Mat, b: cv.Mat) {
-		let dst = new cv.Mat()
-		cv.add(a, b, dst)
-		return dst
-	}
-	static bitwise_and(a: cv.Mat, b: cv.Mat) {
-		let dst = new cv.Mat()
-		cv.bitwise_and(a, b, dst)
-		return dst
-	}
-	static parseTableLines(thresh: cv.Mat, scale = 1, cscale = 40, rscale = 20) {
-		let row_kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(Math.floor(thresh.cols / (rscale * scale)), 1))
-		let col_kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(1, Math.floor(thresh.rows / (cscale * scale))))
-
-		let res = {
-			row_lines: ImgUtils.dilate(ImgUtils.erode(thresh, row_kernel), row_kernel),
-			col_lines: ImgUtils.dilate(ImgUtils.erode(thresh, col_kernel), col_kernel)
-		}
-		row_kernel.delete()
-		col_kernel.delete()
-		return res
-	}
-	static findRects(src: ImgUtils, scale = 1) {
-		let { row_lines, col_lines } = ImgUtils.parseTableLines(src.binary, scale)
-		let mask = ImgUtils.merge(row_lines, col_lines)
-		let contours = new cv.MatVector()
-		let hierarchy = new cv.Mat()
-		cv.findContours(mask, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE) // 所有边框轮廓
-		// cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE) // 外边框轮廓
-
-		let filteredContours = new cv.MatVector()
-		let rects = []
-		for (let i = 0; i < contours.size(); i++) {
-			let contour = contours.get(i)
-
-			let area = cv.contourArea(contour)
-			let approx = new cv.Mat()
-			let approxCount = Math.round(0.02 * cv.arcLength(contour, true))
-			cv.approxPolyDP(contour, approx, approxCount, true)
-			let dataframe: number[][] = nparray.array([...approx.data32S])
-				.reshape(approx.rows, 2).tolist()
-				.sort((a: number[], b: number[]) => {
-					return Math.abs(a[1] - b[1]) < 3 ? a[0] - b[0] : a[1] - b[1]
-				})
-
-			if (area > 50 * scale && ImgUtils.IsApproxReactangle(approx, dataframe)) {
-				filteredContours.push_back(contour)
-				let p = {
-					x0: dataframe[0][0] - 1,
-					y0: dataframe[0][1] - 1,
-					x1: dataframe[3][0] + 1,
-					y1: dataframe[3][1] + 1,
-				}
-				rects.push({
-					pos: p,
-					rect: new cv.Rect(p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0)
-				})
-			}
-			approx.delete()
-		}
-		rects = rects.sort((a, b) => Math.abs(a.pos.y0 - b.pos.y0) < 3 ?
-			Math.abs(a.pos.x0 - b.pos.x0) < 3 ?
-				0 : a.pos.x0 - b.pos.x0 : a.pos.y0 - b.pos.y0
-		)
-
-		// let dst = new cv.Mat.zeros(src.raw.rows, src.raw.cols, cv.CV_8UC3)
-		let dst = src.raw.clone()
-		// cv.drawContours(dst, contours, -1, new cv.Scalar(255, 255, 255), 3)
-		cv.drawContours(dst, filteredContours, -1, new cv.Scalar(255, 255, 255), 2)
-
-		let srcList = {
-			raw: ImgUtils.toDataURL(src.raw),
-			// gray: ImgUtils.toDataURL(src.gray),
-			// binary: ImgUtils.toDataURL(src.binary),
-			// mask: ImgUtils.toDataURL(mask, true),
-			contours: ImgUtils.toDataURL(dst, true),
-		}
-
-		row_lines.delete()
-		col_lines.delete()
-		contours.delete()
-		hierarchy.delete()
-		filteredContours.delete()
-
-		return {
-			srcList: srcList,
-			rects: rects
-		}
-	}
-	static IsApproxReactangle(approx: cv.Mat, dataframe: any) {
-		let count = approx.rows
-		let points = [...approx.data32S]
-		if (count < 4) {
-			// console.log("轮廓不是矩形，顶点数量少于4", dataframe)
-			return false
-		}
-
-		if (count > 4) {
-			// console.log("轮廓可能不是矩形，顶点数量超过4", dataframe)
-			return false
-		}
-
-		const incline = (a: number, b: number) => Math.sqrt(a * a + b * b)
-		const calcDistance = (p1: number[], p2: number[]) => {
-			let dx = p2[0] - p1[0]
-			let dy = p2[1] - p1[1]
-			return Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2))
-		}
-		const calcAngle = (dot_a: number[], dot_b: number[], dot_c: number[]) => {
-			let a = incline(dot_b[0] - dot_c[0], dot_b[1] - dot_c[1])
-			let b = incline(dot_a[0] - dot_c[0], dot_a[1] - dot_c[1])
-			let c = incline(dot_a[0] - dot_b[0], dot_a[1] - dot_b[1])
-			return Math.acos((b * b + c * c - a * a) / (2 * b * c)) * 180 / Math.PI
-		}
-
-		let lens = []
-		for (let i = 0; i < count; i++) {
-			let j = (i + 1) % count
-			lens.push(Math.round(calcDistance(
-				[points[i * 2], points[i * 2 + 1]],
-				[points[j * 2], points[j * 2 + 1]],
-			)))
-		}
-		let dmin = incline(lens[0] - lens[2], lens[1] - lens[3])
-		let dmax = incline(Math.max(lens[0], lens[2]), Math.max(lens[1], lens[3]))
-		if (dmin / dmax > 0.1) {
-			// console.log("轮廓不是矩形，边的长度差异太大", lens)
-			return false
-		}
-
-		let angs = []
-		for (let i = 0; i < count; i++) {
-			let j = (i + 1) % count
-			let k = (i + 3) % count
-			angs.push(Math.round(calcAngle(
-				[points[i * 2], points[i * 2 + 1]],
-				[points[j * 2], points[j * 2 + 1]],
-				[points[k * 2], points[k * 2 + 1]],
-			)))
-		}
-		if (angs.some(v => Math.abs(v - 90) > 10)) {
-			// console.log("轮廓不是矩形，夹角差异直角太大", angs)
-			return false
-		}
-		return true
-	}
-	static recognizeWordsLine(src: cv.Mat) {
-		let arr: number[] = []
-		for (let r = 0; r < src.rows; r++) {
-			for (let c = 0; c < src.cols; c++) {
-				if (src.ptr(r, c) > 0) {
-					arr[r] = (arr[r] ?? 0) + 1
-				}
-			}
-		}
-		return arr
-	}
-	static otsuThreshold(pixels: number[]) {
-		let sumB = 0
-		let wB = 0
-		let wF = 0
-		let mB, mF
-		let max = 0
-		let betweenSum = 0
-		let threshold = 0
-		let count = pixels.length
-
-		// 计算直方图
-		const histogram = new Array(Math.max(...pixels)).fill(0)
-		for (let i = 0; i < count; i++) {
-			histogram[pixels[i]]++
-		}
-
-		// 计算总和
-		let totalSum = 0
-		for (let i = 0; i < histogram.length; i++) {
-			totalSum += i * histogram[i]
-		}
-
-		// 计算类间方差
-		for (let i = 0; i < histogram.length; i++) {
-			wB += histogram[i] // 背景像素权重
-			if (wB === 0)
-				continue
-			wF = count - wB // 前景像素权重
-			if (wF === 0)
-				break
-			sumB += i * histogram[i] // 背景像素和
-			mB = sumB / wB // 背景像素均值
-			mF = (totalSum - sumB) / wF // 前景像素均值
-			// 计算类间方差  
-			betweenSum = wB * wF * Math.pow(mB - mF, 2)
-			// 如果当前类间方差大于之前的最大值，则更新阈值和最大值
-			if (betweenSum >= max) {
-				max = betweenSum
-				threshold = i
-			}
-		}
-
-		return threshold
-	}
-}
-
-class PDFUtils {
-	static CMAP_URL = 'static/pdfjs/cmaps/'
-	static CMAP_PACKED = true
-
-	constructor() {
-	}
-
-	static groupbyRow(arr: any[], scale = 1) {
-		let texts = [...(arr ?? [])]
-		if (texts.length == 0)
-			return []
-		let count = 0
-		texts[0].row = count
-		for (let i = 1; i < texts.length; i++) {
-			let a = texts[i - 1]
-			let b = texts[i]
-			if (Math.abs(a.center.y - b.center.y) > Math.max(a.height, b.height) * scale) {
-				count++
-			}
-			texts[i].row = count
-		}
-		let groups = texts.reduce((acc, v) => {
-			if (!acc[v.row])
-				acc[v.row] = []
-			acc[v.row].push(v)
-			return acc
-		}, [])
-		for (let k in groups)
-			groups[k] = groups[k].sort((a: any, b: any) => a.x - b.x)
-		return groups
-	}
-
-	static async toCanvas(page: PDFPageProxy, scale = 1) {
-		let canvas = document.createElement('canvas')
-		// let canvas = document.getElementById('pdfpreview')
-		let context = canvas.getContext('2d')
-		let viewport = page.getViewport({
-			scale: scale
-		})
-		canvas.height = viewport.height
-		canvas.width = viewport.width
-
-		await page.render({
-			canvasContext: context,
-			viewport: viewport
-		})
-
-		await sleep(300)
-		return {
-			canvas: canvas,
-			viewport: viewport,
-			scale: scale
-		}
-	}
-
-	static async readPDFPage(doc: PDFDocumentProxy, pageNo: number, scale = 1) {
-		let page = await doc.getPage(pageNo)
-		let { canvas, viewport } = await PDFUtils.toCanvas(page, scale)
-
-		// 获取文本内容并排序
-		let tokenizedText = await page.getTextContent()
-		let pageText = tokenizedText.items.filter((v: any) => v.str.trim().length > 0).map((token: any) => {
-			let tr = PDFJS.Util.transform(
-				PDFJS.Util.transform(viewport.transform, token.transform),
-				[1, 0, 0, -1, 0, 0]
-			)
-			let [xt, yt] = PDFJS.Util.applyTransform([0, 0], tr)
-			let width = token.width / 72 * 2.54 * 10
-			let height = token.height / 72 * 2.54 * 10
-			return {
-				str: token.str.trim(),
-				x: Math.round(xt * 10) / 10,
-				y: Math.round(yt * 10) / 10,
-				width: Math.round(width * 10) / 10,
-				height: Math.round(height * 10) / 10,
-				center: {
-					x: Math.round((xt + width / 2) * 10) / 10,
-					y: Math.round((yt + height / 2) * 10) / 10
-				},
-				src: token,
-				transform: tr,
-			}
-		}).sort((a: any, b: any) => {
-			let y0_max = Math.max(a.y, b.y)
-			let y1_min = Math.min(a.y + a.width, b.y + b.width)
-			if (Math.abs(a.center.y - b.center.y) <= Math.min(a.height, b.height)) {
-				if ((y1_min - y0_max) / (Math.max(a.width, b.width)) >= 0.5)
-					return a.x - b.x // 按列排序
-				else if (Math.abs(a.height - b.height) > Math.min(a.height, b.height))
-					return b.height - a.height // 按字号排序
-				else
-					return Math.pow(a.center.y, 2) * Math.pow(a.x, 2) -
-						Math.pow(b.center.y, 2) * Math.pow(b.x, 2) // 按原点距离排序
-			}
-			return a.y - b.y // 按行排序
-		}).filter((v, i, arr) => {
-			if (i == 0)
-				return true
-			return ['x', 'y', 'str'].some(x => arr[i - 1][x] != v[x])
-		})
-		// 通过表格框线分割单元格内文本内容
-		let img = new ImgUtils(canvas)
-		let { rects, srcList } = ImgUtils.findRects(img, scale)
-
-		let textRange: any[] = []
-		let outRange: any[] = pageText.filter((token: any) => {
-			return !rects.map((v, i) => {
-				if (v.pos.x0 <= token.center.x && v.pos.x1 >= token.center.x &&
-					v.pos.y0 <= token.center.y && v.pos.y1 >= token.center.y) {
-					textRange[i] = [...(textRange[i] ?? []), token]
-					return true
-				}
-				return false
-			}).some(v => v)
-		})
-
-
-		let cells = rects.map((v, i) => {
-			return {
-				texts: PDFUtils.groupbyRow(textRange[i], scale),
-				src: '',
-				// src: ImgUtils.toDataURL(img.raw.roi(v.rect), true),
-				range: v.pos
-			}
-		})
-		img.delete()
-
-		return {
-			pageNo: pageNo,
-			element: { canvas: canvas, scale: scale, srcList: Object.values(srcList) },
-			pageText: pageText,
-			rangeText: { texts: PDFUtils.groupbyRow(outRange, scale), cells: cells }
-		}
-	}
-
-	static async readPDFDoc(url: any, resolve: Function) {
-		PDFJS.getDocument({
-			url: url,
-			// data: data,
-			cMapUrl: PDFUtils.CMAP_URL,
-			cMapPacked: PDFUtils.CMAP_PACKED
-		}).promise.then((doc) => {
-			for (let pageNo = 1; pageNo <= doc.numPages; pageNo++)
-				PDFUtils.readPDFPage(doc, pageNo, 2)
-					.then(v => resolve(v))
-					.catch((err) => console.error(err))
-		}).catch((err) => {
-			console.error(err)
-		})
-	}
-
-	static async mergePDF(...pages: PDFPageProxy[]) {
-		return pages
-	}
-
-	static async splitPDF(doc: PDFDocumentProxy) {
-		return doc
-	}
-}
-
-class OFDUtils {
-	raw: Promise<JSZIP>
-	ofd: Element
-	docInfo: {}
-	tags: {}
-	pages: any[]
-
-	constructor(arraybuffer: Promise<ArrayBuffer>) {
-		let zip = new JSZIP()
-		this.raw = zip.loadAsync(arraybuffer)
-	}
-
-	then(resolve: any = (v: OFDUtils) => v) {
-		const fun = async () => {
-			this.ofd = await this.parseXml('OFD.xml')
-			this.docInfo = this.parseDocInfo(this.ofd)
-
-			let docRoot = this.ofd.getElementsByTagName('ofd:DocRoot')[0].textContent
-
-			if (docRoot) {
-				let rootDir = docRoot.replace(/[^\/]+$/g, '')
-				let pages, tags
-				let root = await this.parseXml(docRoot)
-
-				let tags_path = root.getElementsByTagName('ofd:CustomTags')[0].textContent
-				if (tags_path) {
-					let tags_xml = await this.parseXml(rootDir + tags_path)
-					let tags_dir = rootDir + tags_path?.replace(/[^\/]+$/g, '')
-					tags = Object.entries(tags_xml.getElementsByTagName('ofd:CustomTag')).map(([, v]) => tags_dir + v.textContent)
-					this.tags = await this.parseTags(tags)
-				}
-
-				pages = Object.entries(root.getElementsByTagName('ofd:Pages')[0].children)
-					.map(([, v]) => rootDir + v.getAttribute('BaseLoc'))
-				this.pages = await this.parsePages(pages)
-			}
-			return resolve(this)
-		}
-		return fun()
-	}
-
-	async parseXml(path: string) {
-		let xml: Element
-		await this.raw.then(async (zip) => {
-			await zip.files[path].async('string').then((str) => {
-				// 兼容税务UKey版式发票
-				str = str
-					.replaceAll('<:', '<ofd:')
-					.replaceAll('</:', '</ofd:')
-					.replace('xmlns:=""', 'xmlns:ofd="http://www.ofdspec.org/2016"')
-				xml = $.parseXML(str)
-			})
-		})
-		return xml
-	}
-
-	parseDocInfo(ofd: Element) {
-		return Object.entries(ofd.getElementsByTagName('ofd:DocInfo')[0].children).reduce((prev: any, [, v]) => {
-			if (v.children.length > 0) {
-				// customdatas
-				prev[v.localName] = Object.entries(v.children).reduce((dic: any, [, v]) => {
-					let name = v.getAttribute('Name') ?? v.localName
-					dic[name] = v.textContent
-					return dic
-				}, {})
-			} else {
-				// fields
-				prev[v.localName] = v.textContent
-			}
-			return prev
-		}, {})
-	}
-
-	async parseTags(tags: string[]) {
-		let res: any = {}
-		for (let v of tags) {
-			let xml = await this.parseXml(v)
-			Object.entries(xml.getElementsByTagName('ofd:ObjectRef')).map(([, v]) => {
-				if (v.parentElement && v.textContent)
-					res[v.textContent] = v.parentElement.localName
-			})
-		}
-		return res
-	}
-
-	async parsePages(pages: string[]) {
-		let arr = []
-		for (let i = 0; i < pages.length; i++) {
-			let xml = await this.parseXml(pages[i])
-			arr[i] = Object.entries(xml.getElementsByTagName('ofd:TextCode')).map(([, v]) => {
-				let id = v.parentElement?.getAttribute('ID')
-				return {
-					id: id,
-					name: this.tags[id],
-					value: v.textContent
-				}
-			})
-		}
-		return arr
-	}
-}
+import { PDFUtils } from '../utils/PDFUtils'
+import { OFDUtils, jq } from '../utils/OFDUtils'
 
 const fileUrl: any = {}
 var computedFields = {
@@ -721,9 +146,7 @@ var computedFields = {
 export default {
 	name: 'Home',
 	components: {
-		monacoEditor,
-		Splitpanes,
-		Pane
+		monacoEditor
 	},
 	data() {
 		window.onresize = () => {
@@ -775,7 +198,7 @@ export default {
 					read: (isdefault = false) => {
 						let exportConfig = localStorage.getItem('exportConfig')
 						if (exportConfig == null || isdefault)
-							$.ajax({
+							jq.ajax({
 								url: 'static/export.config.default.js',
 								async: false,
 								dataType: 'text',
@@ -792,6 +215,7 @@ export default {
 					},
 					save: () => {
 						localStorage.setItem('exportConfig', this.ScriptSetting.value)
+						this.ScriptSetting.btnFunctions.read()
 						this.$message({
 							message: '配置保存完毕',
 							type: 'success'
@@ -840,7 +264,83 @@ export default {
 		recognizeText() {
 
 		},
-		renameFiles() {
+		parseFiles(payload: any[]) {
+			for (const item of payload) {
+				if (item['isFile'] && !this.tableData.some((row: any) => row.path == item.path)) {
+					if (item['name'].endsWith('.pdf'))
+						PDFUtils.readPDFDoc(item['path'].replace(/\\/g, '/'), (e: any) => {
+							let row = {
+								pageNo: e.pageNo,
+								element: e.element,
+								path: item['path'],
+								oldname: item['name'],
+								type: 'pdf',
+								_text: {
+									value: e.rangeText.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
+									texts: e.rangeText.texts,
+								},
+								_cells: e.rangeText.cells.map((v: any, i: number) => {
+									let name = `Cell_${i}`
+									return {
+										id: name,
+										label: name,
+										value: v.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
+										...v
+									}
+								}),
+								_empty: false
+							}
+							this.tableData.push(row)
+						})
+					else if (item['name'].endsWith('.ofd')) {
+						fetch(item['path']).then((res) => {
+							res.arrayBuffer().then(arr => {
+								let ofd = new OFDUtils(arr)
+								ofd.then((v: OFDUtils) => {
+									v.pages.map((v, i) => {
+										let row = {
+											pageNo: i + 1,
+											element: v.element,
+											path: item['path'],
+											oldname: item['name'],
+											type: 'ofd',
+											_text: {
+												value: '',
+												texts: [],
+											},
+											_cells: v.texts.map((val: any, i: number) => {
+												return {
+													id: i,
+													label: val.name,
+													value: val.value,
+												}
+											}),
+											_empty: false
+										}
+										console.log(row)
+										this.tableData.push(row)
+									})
+								})
+							})
+						})
+					}
+				}
+			}
+		},
+		saveAsFiles() {
+			let selected = this.$refs.multipleTableRef.getSelectionRows()
+			if (selected.length > 0) {
+				let doc = new jsPDF('landscape', "px")
+				selected.forEach((v, i) => {
+					let canvas = v.element.canvas
+					let maxwidth = 21.5 / 2.54 * 72
+					let maxheight = canvas.height * maxwidth / canvas.width
+					doc.addPage([maxwidth, maxheight], maxheight <= maxwidth ? 'landscape' : 'portrait')
+					doc.addImage(canvas, 'jpg', 1, 1, maxwidth, maxheight)
+				})
+				doc.deletePage(1)
+				saveAs(doc.output('bloburi'), 'merge.pdf')
+			}
 		},
 		exportDataHeader() {
 			let fields = {
@@ -874,7 +374,7 @@ export default {
 			const sums: any[] = []
 			columns.forEach((column: any, index: number) => {
 				if (index === 2) {
-					sums[index] = '合计'
+					sums[index] = `合计 (选中${this.$refs.multipleTableRef.getSelectionRows().length}行/共${this.tableData.length}行)`
 					return
 				}
 				let total: any = this.tableHead.find(v => v.id == column.rawColumnKey)?.total
@@ -903,68 +403,18 @@ export default {
 				name: file.name
 			}])
 		},
-		parseFiles(payload: any[]) {
-			for (const item of payload) {
-				if (item['isFile'] && !this.tableData.some((row: any) => row.path == item.path)) {
-					if (item['name'].endsWith('.pdf'))
-						PDFUtils.readPDFDoc(item['path'].replace(/\\/g, '/'), (e: any) => {
-							let row = {
-								pageNo: e.pageNo,
-								element: e.element,
-								path: item['path'],
-								oldname: item['name'],
-								type: 'pdf',
-								_text: {
-									value: e.rangeText.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
-									texts: e.rangeText.texts,
-								},
-								_cells: e.rangeText.cells.map((v: any, i: number) => {
-									let name = `Cell_${i}`
-									return {
-										id: name,
-										label: name,
-										value: v.texts?.map((x: any) => (x) instanceof Array ? x?.map((v: any) => v.str).join('') : x?.str).join('\n'),
-										...v
-									}
-								}),
-								_empty: false
-							}
-							this.tableData.push(row)
-						})
-					else if (item['name'].endsWith('.ofd')) {
-						fetch(item['path']).then((res) => {
-							let ofd = new OFDUtils(res.arrayBuffer())
-							ofd.then((v: OFDUtils) => {
-								v.pages.map((v, i) => {
-									let row = {
-										pageNo: i + 1,
-										element: null,
-										path: item['path'],
-										oldname: item['name'],
-										type: 'ofd',
-										_text: {
-											value: '',
-											texts: [],
-										},
-										_cells: v.map((val: any, i: number) => {
-											return {
-												id: i,
-												label: val.name,
-												value: val.value,
-											}
-										}),
-										_empty: false
-									}
-									this.tableData.push(row)
-								})
-							})
-						})
-					}
-				}
-			}
-		},
 		handleEditorChange(value: any) {
 			// console.log(value)
+		},
+		removeSelectedRows() {
+			let rows = this.$refs.multipleTableRef.getSelectionRows()
+			if (rows) {
+				this.tableData = this.tableData.filter((v) => !rows.some(r => r.path == v.path))
+				this.$message({
+					message: `清空${rows.length ?? 0}行`,
+					type: 'success'
+				})
+			}
 		}
 	}
 }
@@ -974,4 +424,4 @@ export default {
 .el-header {
 	padding: 0 0;
 }
-</style>
+</style>../utils/OFDUtils../utils/PDFUtils

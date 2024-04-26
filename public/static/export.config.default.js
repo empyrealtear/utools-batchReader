@@ -27,7 +27,7 @@ computedFields = {
                 width: 150,
                 render: (props) => {
                     switch (props.row.type) {
-                        case 'pdf': return /发票代码[:：](?<id>[0-9]+)/g.exec(props.row._text.value)?.groups?.id
+                        case 'pdf': return /发票代码\s*[:：]\s*(?<id>[0-9]+)/g.exec(props.row._text.value)?.groups?.id
                         case 'ofd': return props.row._cells.find((v) => v.label == 'InvoiceCode')?.value
                         default: null
                     }
@@ -40,7 +40,7 @@ computedFields = {
                 width: 200,
                 render: (props) => {
                     switch (props.row.type) {
-                        case 'pdf': return /发票号码[:：](?<id>[0-9]+)/g.exec(props.row._text.value)?.groups?.id
+                        case 'pdf': return /发票号码\s*[:：]\s*(?<id>[0-9]+)/g.exec(props.row._text.value)?.groups?.id
                         case 'ofd': return props.row._cells.find((v) => v.label == 'InvoiceNo')?.value
                         default: return null
                     }
@@ -53,7 +53,7 @@ computedFields = {
                 width: 120,
                 render: (props) => {
                     switch (props.row.type) {
-                        case 'pdf': return /开票日期[:：](?<id>\d{4}(年|\s+)\d{1,2}(月|\s+)\d{1,2})/g.exec(props.row._text.value)?.groups?.id?.replace(/[^\d]+/g, '-')
+                        case 'pdf': return /开票日期\s*[:：]\s*(?<id>\d{4}(年|\s+)\d{1,2}(月|\s+)\d{1,2})/g.exec(props.row._text.value)?.groups?.id?.replace(/[^\d]+/g, '-')
                         case 'ofd': return props.row._cells.find((v) => v.label == 'IssueDate')?.value?.replace(/[^\d]+/g, '-').replace(/-$/g, '')
                         default: return null
                     }

@@ -11,7 +11,7 @@
 	"features": [
 		{
 			"code": "main",
-			"explain": "识别文件，并提取内容",
+			"explain": "读取票据",
 			"cmds": [
 				"reader",
 				"rd"
@@ -19,11 +19,11 @@
 		},
 		{
 			"code": "ReaderFiles",
-			"explain": "读取文件",
+			"explain": "读取票据",
 			"cmds": [
 				{
 					"type": "files",
-					"label": "读取文件",
+					"label": "读取票据",
 					"fileType": [
 						"file",
 						"directory"
