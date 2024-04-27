@@ -11,6 +11,7 @@ class ImgUtils {
 		let blur = this.toBlur(this.gray)
 		this.binary = this.toBinary(blur)
 		blur.delete()
+		// this.binary = this.toBinary(this.gray)
 		// cv.imshow('pdfpreview', this.binary)
 		// document.getElementById('imgpreview_1')?.setAttribute('src', ImgUtils.toDataURL(this.raw))
 	}
@@ -37,11 +38,14 @@ class ImgUtils {
 		this.binary.delete()
 	}
 	static toDataURL(mat: cv.Mat, isDelete = false) {
+		return ImgUtils.toCanvas(mat, isDelete).toDataURL('image/jpg')
+	}
+	static toCanvas(mat: cv.Mat, isDelete = false) {
 		let canvas = document.createElement('canvas')
 		cv.imshow(canvas, mat)
 		if (isDelete)
 			mat.delete()
-		return canvas.toDataURL('image/jpg')
+		return canvas
 	}
 
 	static erode(src: cv.Mat, kernel: cv.Mat) {
@@ -79,9 +83,9 @@ class ImgUtils {
 		cv.bitwise_and(a, b, dst)
 		return dst
 	}
-	static parseTableLines(thresh: cv.Mat, scale = 1, cscale = 40, rscale = 20) {
-		let row_kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(Math.floor(thresh.cols / (rscale * scale)), 1))
-		let col_kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(1, Math.floor(thresh.rows / (cscale * scale))))
+	static parseTableLines(thresh: cv.Mat, cscale = 30, rscale = 15) {
+		let row_kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(Math.floor(thresh.cols / rscale), 1))
+		let col_kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(1, Math.floor(thresh.rows / cscale)))
 
 		let res = {
 			row_lines: ImgUtils.dilate(ImgUtils.erode(thresh, row_kernel), row_kernel),
@@ -98,7 +102,7 @@ class ImgUtils {
 		return newArr
 	}
 	static findRects(src: ImgUtils, scale = 1) {
-		let { row_lines, col_lines } = ImgUtils.parseTableLines(src.binary, scale)
+		let { row_lines, col_lines } = ImgUtils.parseTableLines(src.binary)
 		let mask = ImgUtils.merge(row_lines, col_lines)
 		let contours = new cv.MatVector()
 		let hierarchy = new cv.Mat()
@@ -112,15 +116,31 @@ class ImgUtils {
 
 			let area = cv.contourArea(contour)
 			let approx = new cv.Mat()
-			let approxCount = Math.round(0.02 * cv.arcLength(contour, true))
+			let approxCount = Math.round(0.015 * cv.arcLength(contour, true))
 			cv.approxPolyDP(contour, approx, approxCount, true)
+
 			let dataframe: number[][] = ImgUtils.reshape([...approx.data32S], approx.rows, 2)
 				.sort((a: number[], b: number[]) => {
 					return Math.abs(a[1] - b[1]) < 3 ? a[0] - b[0] : a[1] - b[1]
 				})
 
-			if (area > 50 * scale && ImgUtils.IsApproxReactangle(approx)) {
+			if (area > 50 * scale && ImgUtils.IsApproxReactangle(approx, dataframe)) {
 				filteredContours.push_back(contour)
+			// if (area > 50 * scale) {
+			// 	if (approx.rows < 4) {
+			// 		let minrect = cv.minAreaRect(contour)
+			// 		let points = cv.RotatedRect.points(minrect)
+			// 		dataframe = points.map((v: any) => [v.x, v.y])
+			// 	} else if (approx.rows > 4) {
+			// 		let minrect = cv.minAreaRect(contour)
+			// 		let points = cv.RotatedRect.points(minrect)
+			// 		dataframe = points.map((v: any) => [v.x, v.y])
+			// 		// console.log(ImgUtils.boxPoints(minrect))
+			// 	} else if (ImgUtils.IsApproxReactangle(approx, dataframe)) {
+			// 		filteredContours.push_back(contour)
+			// 	} else {
+			// 		continue
+			// 	}
 				let p = {
 					x0: dataframe[0][0] - 1,
 					y0: dataframe[0][1] - 1,
@@ -141,14 +161,15 @@ class ImgUtils {
 
 		// let dst = new cv.Mat.zeros(src.raw.rows, src.raw.cols, cv.CV_8UC3)
 		let dst = src.raw.clone()
-		// cv.drawContours(dst, contours, -1, new cv.Scalar(255, 255, 255), 3)
-		cv.drawContours(dst, filteredContours, -1, new cv.Scalar(0, 0, 0), 2)
+		cv.drawContours(dst, contours, -1, new cv.Scalar(0, 255, 0, 255), 3)
+		cv.drawContours(dst, filteredContours, -1, new cv.Scalar(0, 0, 255, 255), 2)
 
 		let srcList = {
 			raw: ImgUtils.toDataURL(src.raw),
 			// gray: ImgUtils.toDataURL(src.gray),
 			// binary: ImgUtils.toDataURL(src.binary),
 			// mask: ImgUtils.toDataURL(mask, true),
+			// bit: ImgUtils.toDataURL(ImgUtils.bitwise_and(row_lines, col_lines), true),
 			contours: ImgUtils.toDataURL(dst, true),
 		}
 
@@ -163,16 +184,20 @@ class ImgUtils {
 			rects: rects
 		}
 	}
-	static IsApproxReactangle(approx: cv.Mat) {
+	static IsApproxReactangle(approx: cv.Mat, dataframe: any) {
 		let count = approx.rows
 		let points = [...approx.data32S]
+
+		// if (dataframe.some(v => Math.abs(v[0] - 162) <= 10 || Math.abs(v[1] - 288) <= 10))
+		// 	console.log(dataframe)
+
 		if (count < 4) {
-			// console.log("轮廓不是矩形，顶点数量少于4")
+			// console.log("轮廓不是矩形，顶点数量少于4", dataframe)
 			return false
 		}
 
 		if (count > 4) {
-			// console.log("轮廓可能不是矩形，顶点数量超过4")
+			// console.log("轮廓可能不是矩形，顶点数量超过4", dataframe)
 			return false
 		}
 
@@ -230,50 +255,6 @@ class ImgUtils {
 			}
 		}
 		return arr
-	}
-	static otsuThreshold(pixels: number[]) {
-		let sumB = 0
-		let wB = 0
-		let wF = 0
-		let mB, mF
-		let max = 0
-		let betweenSum = 0
-		let threshold = 0
-		let count = pixels.length
-
-		// 计算直方图
-		const histogram = new Array(Math.max(...pixels)).fill(0)
-		for (let i = 0; i < count; i++) {
-			histogram[pixels[i]]++
-		}
-
-		// 计算总和
-		let totalSum = 0
-		for (let i = 0; i < histogram.length; i++) {
-			totalSum += i * histogram[i]
-		}
-
-		// 计算类间方差
-		for (let i = 0; i < histogram.length; i++) {
-			wB += histogram[i] // 背景像素权重
-			if (wB === 0)
-				continue
-			wF = count - wB // 前景像素权重
-			if (wF === 0)
-				break
-			sumB += i * histogram[i] // 背景像素和
-			mB = sumB / wB // 背景像素均值
-			mF = (totalSum - sumB) / wF // 前景像素均值
-			// 计算类间方差  
-			betweenSum = wB * wF * Math.pow(mB - mF, 2)
-			// 如果当前类间方差大于之前的最大值，则更新阈值和最大值
-			if (betweenSum >= max) {
-				max = betweenSum
-				threshold = i
-			}
-		}
-
-		return threshold
 	}
 }
 

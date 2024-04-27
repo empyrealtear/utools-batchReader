@@ -11,7 +11,7 @@ computedFields = {
         let getAmount = (row) => {
             switch (row.type) {
                 case 'pdf': {
-                    let match = row._cells.find((v) => /.小写.¥([0-9.]+)$|¥([0-9.]+).小写.$/g.test((v.value ?? '').trim()))
+                    let match = row._cells.find((v) => /.小写.\s*[¥￥]\s*([0-9.]+)$|[¥￥]\s*([0-9.]+)\s*.小写.$/g.test((v.value ?? '').trim()))
                     return parseFloat(match?.value?.replace(/[^-0-9.]+/g, ''))
                 }
                 case 'ofd': return parseFloat(row._cells.find((v) => v.label == 'TaxInclusiveTotalAmount' && v.value != '¥')?.value)
@@ -174,7 +174,7 @@ computedFields = {
                             }
                             return ''
                         }
-                        case 'ofd': return props.row._cells.find((v) => v.label == 'SellerFinancialAccount')?.value
+                        case 'ofd': return props.row._cells.find((v) => v.label == 'SellerAddrTel')?.value
                         default: return null
                     }
                 },

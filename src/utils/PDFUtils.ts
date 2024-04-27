@@ -2,14 +2,15 @@ import { cv, ImgUtils } from './ImgUtils.ts'
 import * as PDFJS from 'pdfjs-dist'
 import { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/display/api'
 PDFJS.GlobalWorkerOptions.workerSrc = 'static/pdfjs/pdf.worker.js'
+import { PDFDocument } from 'pdf-lib'
 
-const sleep = (time: number) => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve(time)
-        }, time)
-    })
-}
+// const sleep = (time: number) => {
+//     return new Promise((resolve) => {
+//         setTimeout(() => {
+//             resolve(time)
+//         }, time)
+//     })
+// }
 
 
 class PDFUtils {
@@ -44,7 +45,6 @@ class PDFUtils {
         }
         return groups
     }
-
     static async toCanvas(page: PDFPageProxy, scale = 1) {
         let canvas = document.createElement('canvas')
         let context = canvas.getContext('2d')
@@ -59,8 +59,6 @@ class PDFUtils {
                 canvasContext: context,
                 viewport: viewport
             }).promise
-            //.then((v) => console.log('渲染完毕'))
-            // await sleep(400)
         }
         return {
             canvas: canvas,
@@ -68,10 +66,8 @@ class PDFUtils {
             scale: scale
         }
     }
-
     static async readPDFPage(doc: PDFDocumentProxy, pageNo: number, scale = 1) {
         let page = await doc.getPage(pageNo)
-        
         let { canvas, viewport } = await PDFUtils.toCanvas(page, scale)
 
         // 获取文本内容并排序
@@ -149,7 +145,6 @@ class PDFUtils {
             rangeText: { texts: PDFUtils.groupbyRow(outRange, scale), cells: cells }
         }
     }
-
     static async readPDFDoc(url: any, resolve: Function) {
         PDFJS.getDocument({
             url: url,
@@ -166,13 +161,51 @@ class PDFUtils {
         })
     }
 
-    static async mergePDF(...pages: PDFPageProxy[]) {
-        return pages
+    static async loadPDF(url: string) {
+        let existingPdfBytes = await fetch(url).then(res => res.arrayBuffer())
+        return await PDFDocument.load(existingPdfBytes)
+    }
+    static async mergePDF(urls: string[]) {
+        const mergedPdfDoc = await PDFDocument.create()
+        for (let i = 0; i < urls.length; i++) {
+            let doc = await PDFUtils.loadPDF(urls[i])
+            let copiedPages = await mergedPdfDoc.copyPages(doc, doc.getPageIndices())
+            copiedPages.forEach(page => mergedPdfDoc.addPage(page))
+        }
+        return mergedPdfDoc
     }
 
-    static async splitPDF(doc: PDFDocumentProxy) {
-        return doc
+    static async splitPDF(url: string) {
+        let doc = await PDFUtils.loadPDF(url)
+        let pagesCount = doc.getPages().length
+        let splitDocs = []
+        for (let i = 0; i < pagesCount; i++) {
+            let subDoc = await PDFDocument.create()
+            let [copiedPage] = await subDoc.copyPages(doc, [i])
+            subDoc.addPage(copiedPage)
+            splitDocs.push(subDoc)
+        }
+        return splitDocs
+    }
+
+    static async merge(objs: { url: string, type: string }[]) {
+        const mergedPdfDoc = await PDFDocument.create()
+        for (let i = 0; i < objs.length; i++) {
+            let { url, type, scale } = objs[i]
+            if (type == 'pdf') {
+                let doc = await PDFUtils.loadPDF(url)
+                let copiedPages = await mergedPdfDoc.copyPages(doc, doc.getPageIndices())
+                copiedPages.forEach(page => mergedPdfDoc.addPage(page))
+            } else if (type == 'image') {
+                let imageBytes = await fetch(url).then(res => res.arrayBuffer())
+                let image = await mergedPdfDoc.embedPng(imageBytes)
+                let dims = image.scale(scale ?? 1)
+                let page = mergedPdfDoc.addPage([dims.width, dims.height])
+                page.drawImage(image, { x: 0, y: 0, width: dims.width, height: dims.height })
+            }
+        }
+        return mergedPdfDoc
     }
 }
 
-export { ImgUtils, PDFUtils, cv, sleep }
+export { ImgUtils, PDFUtils, cv }

@@ -47,7 +47,7 @@ class OFDUtils {
 			ofdjs.parseOfdDocument({
 				ofd: this.arraybuffer,
 				success: async (res: any) => {
-					let screenWidth = 600
+					let screenWidth = 900
 					let scale = 2
 					let ofdRenderRes = ofdjs.renderOfd(screenWidth * scale, res[0])
 					var div = document.getElementById('preview-cache')

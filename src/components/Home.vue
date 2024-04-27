@@ -55,6 +55,7 @@
 					<el-button type="primary" round>读取文件</el-button>
 				</el-upload>
 				<el-button type="primary" @click="removeSelectedRows" round>清空所选</el-button>
+				<el-button type="primary" @click="saveAsSubFiles" round>分页下载</el-button>
 				<el-button type="primary" @click="saveAsFiles" round>合并下载</el-button>
 				<download-excel :fields="exportDataHeader()" :fetch="fetchTableData" type="csv" :name='`exportdata.csv`'
 					stringifyLongNum>
@@ -117,12 +118,12 @@ import { ElTable } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 
 import { saveAs } from 'file-saver'
-import jsPDF from 'jspdf'
 
 import * as monaco from 'monaco-editor'
 import monacoEditor from './monacoEditor.vue'
-import { PDFUtils } from '../utils/PDFUtils'
+import { ImgUtils, PDFUtils, cv } from '../utils/PDFUtils'
 import { OFDUtils, jq } from '../utils/OFDUtils'
+import JSZip from 'jszip'
 
 const fileUrl: any = {}
 var computedFields = {
@@ -267,7 +268,7 @@ export default {
 		parseFiles(payload: any[]) {
 			for (const item of payload) {
 				if (item['isFile'] && !this.tableData.some((row: any) => row.path == item.path)) {
-					if (item['name'].endsWith('.pdf'))
+					if (item['name'].endsWith('.pdf')) {
 						PDFUtils.readPDFDoc(item['path'].replace(/\\/g, '/'), (e: any) => {
 							let row = {
 								pageNo: e.pageNo,
@@ -290,8 +291,10 @@ export default {
 								}),
 								_empty: false
 							}
+							console.log(row)
 							this.tableData.push(row)
 						})
+					}
 					else if (item['name'].endsWith('.ofd')) {
 						fetch(item['path']).then((res) => {
 							res.arrayBuffer().then(arr => {
@@ -324,22 +327,97 @@ export default {
 							})
 						})
 					}
+					// else if (/\.(jpe?g|png)$/g.test(item['name'])) {
+					// 	fetch(item['path']).then((res) => {
+					// 		res.blob().then(blob => {
+					// 			let img = new Image()
+					// 			img.src = URL.createObjectURL(blob)
+					// 			img.onload = (event) => {
+					// 				let canvas = document.createElement('canvas')
+					// 				canvas.width = img.width
+					// 				canvas.height = img.height
+					// 				let ctx = canvas.getContext('2d')
+					// 				ctx?.drawImage(img, 0, 0, img.width, img.height)
+
+					// 				let src = new ImgUtils(canvas)
+					// 				let scale = 1
+					// 				let { rects, srcList } = ImgUtils.findRects(src, scale)
+					// 				let row = {
+					// 					pageNo: 1,
+					// 					element: { canvas: canvas, scale: 1, srcList: Object.values(srcList) },
+					// 					path: item['path'],
+					// 					oldname: item['name'],
+					// 					type: 'img',
+					// 					_text: {
+					// 						value: '',
+					// 						texts: [],
+					// 					},
+					// 					_cells: [],
+					// 					_empty: false
+					// 				}
+					// 				console.log(row)
+					// 				this.tableData.push(row)
+					// 			}
+					// 		})
+					// 	})
+					// }
 				}
+			}
+		},
+		async saveAsSubFiles() {
+			let selected = this.$refs.multipleTableRef.getSelectionRows()
+			if (selected.length > 0) {
+				let zip = new JSZip()
+				let files: any = {}
+				for (let i = 0; i < selected.length; i++) {
+					if (selected[i].oldname.endsWith('.pdf')) {
+						if (!(selected[i].path in files)) {
+							files[selected[i].path] = []
+							let docs = await PDFUtils.splitPDF(selected[i].path)
+
+							for (let pageNo = 0; pageNo < docs.length; pageNo++) {
+								files[selected[i].path].push({
+									blob: new Blob([await docs[pageNo].save()]),
+									name: this.newName({ row: selected[i + pageNo], column: this.tableHead, index: i })
+								})
+							}
+						}
+					} else {
+						if (!(selected[i].path in files)) {
+							files[selected[i].path] = [{
+								blob: await new Promise(resolve => selected[i].element.canvas.toBlob(resolve)),
+								name: this.newName({ row: selected[i], column: this.tableHead, index: i }).replace(/[^\.]+$/, 'png')
+							}]
+						}
+					}
+				}
+				Object.entries(files).forEach((v: any[]) => v[1].forEach((item: any) => {
+					zip.file(item.name, item.blob, { binary: true })
+				}))
+				let content = await zip.generateAsync({ type: "blob" })
+				saveAs(new Blob([content]), `split.zip`)
 			}
 		},
 		saveAsFiles() {
 			let selected = this.$refs.multipleTableRef.getSelectionRows()
+			console.log(selected)
 			if (selected.length > 0) {
-				let doc = new jsPDF('landscape', "px")
-				selected.forEach((v, i) => {
-					let canvas = v.element.canvas
-					let maxwidth = 21.5 / 2.54 * 72
-					let maxheight = canvas.height * maxwidth / canvas.width
-					doc.addPage([maxwidth, maxheight], maxheight <= maxwidth ? 'landscape' : 'portrait')
-					doc.addImage(canvas, 'jpg', 1, 1, maxwidth, maxheight)
+				PDFUtils.merge(selected.map((v: any) => {
+					if (v.oldname.endsWith('.pdf'))
+						return {
+							url: v.path,
+							type: 'pdf'
+						}
+					else
+						return {
+							url: v.element.canvas.toDataURL(),
+							type: 'image',
+							scale: 0.5
+						}
+				})).then(async doc => {
+					let bytes = await doc.save()
+					saveAs(new Blob([bytes]), 'merge.pdf')
 				})
-				doc.deletePage(1)
-				saveAs(doc.output('bloburi'), 'merge.pdf')
 			}
 		},
 		exportDataHeader() {
@@ -424,4 +502,4 @@ export default {
 .el-header {
 	padding: 0 0;
 }
-</style>../utils/OFDUtils../utils/PDFUtils
+</style>
