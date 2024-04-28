@@ -2,7 +2,7 @@
   "name": "utools-plugin-template",
   "private": true,
   "main": "dist-electron/main/index.js",
-  "version": "0.0.0",
+  "version": "0.0.4",
   "author": "QC2168",
   "description": "Easily create utools plugins",
   "scripts": {

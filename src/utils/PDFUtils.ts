@@ -53,8 +53,8 @@ class PDFUtils {
         })
         canvas.height = viewport.height
         canvas.width = viewport.width
-
         if (context) {
+            context.imageSmoothingEnabled = true
             await page.render({
                 canvasContext: context,
                 viewport: viewport
@@ -188,14 +188,17 @@ class PDFUtils {
         return splitDocs
     }
 
-    static async merge(objs: { url: string, type: string }[]) {
+    static async merge(objs: { url: string, type: string, scale: number, pageNos: Set<number> | undefined }[]) {
         const mergedPdfDoc = await PDFDocument.create()
         for (let i = 0; i < objs.length; i++) {
-            let { url, type, scale } = objs[i]
+            let { url, type, scale, pageNos } = objs[i]
             if (type == 'pdf') {
                 let doc = await PDFUtils.loadPDF(url)
                 let copiedPages = await mergedPdfDoc.copyPages(doc, doc.getPageIndices())
-                copiedPages.forEach(page => mergedPdfDoc.addPage(page))
+                copiedPages.forEach((page, pageNo) => {
+                    if (pageNos == null || pageNos.has(pageNo))
+                        mergedPdfDoc.addPage(page)
+                })
             } else if (type == 'image') {
                 let imageBytes = await fetch(url).then(res => res.arrayBuffer())
                 let image = await mergedPdfDoc.embedPng(imageBytes)

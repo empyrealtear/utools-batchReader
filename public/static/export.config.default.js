@@ -228,5 +228,23 @@ computedFields = {
             format = format.replace(`[${v.label}]`, v.render(props) ?? '')
         })
         return format + '.' + props.row.oldname.replace(/.*\./, '')
+    },
+    tableSort: ({ column, prop, order }) => {
+        let collator = new Intl.Collator('zh-Hans-CN', { numeric: true })
+        let key = column.rawColumnKey
+        let ascend = order == 'ascending' ? 1 : -1
+        if (key == 'oldname' || key == 'pageNo') {
+            this.tableData = this.tableData.sort((a, b) => {
+                if (a.path == b.path)
+                    return (a.pageNo - b.pageNo) * ascend
+                else
+                    return collator.compare(a.oldname, b.oldname) * ascend
+            })
+        } else {
+            let render = key == 'newname' ? this.newName : this.tableHead.find(v => v.id == key)?.render
+            this.tableData = this.tableData.sort((a, b) => {
+                return collator.compare(render({ row: a }), render({ row: b })) * ascend
+            })
+        }
     }
 }

@@ -2,8 +2,9 @@
 	<el-tabs model-value="Data" stretch>
 		<el-tab-pane label="票据信息" name="Data">
 			<el-table ref="multipleTableRef" :data="tableData" :size="screenSize.height < 500 ? 'small' : 'default'"
-				:height="screenSize.height - 150" :style="{ 'width': `${screenSize.width - 50}px` }" border stripe
-				highlight-current-row :header-cell-style="{ 'text-align': 'center' }" :summary-method="getSum" show-summary>
+				:height="screenSize.height - 110" :style="{ 'width': `${screenSize.width - 50}px` }" border stripe
+				highlight-current-row :header-cell-style="{ 'text-align': 'center' }" :summary-method="tableSummary"
+				show-summary @sort-change="tableSort">
 				<el-table-column type="expand" key="expand" width="30" align="center" fixed>
 					<template #default="props">
 						<el-form :size="screenSize.height < 500 ? 'small' : 'default'" label-position="right"
@@ -28,27 +29,26 @@
 					</template>
 				</el-table-column>
 				<el-table-column key="path" type="selection" width="38" align="center" fixed />
-				<el-table-column key="oldname" prop="oldname" label="旧文件名" min-width="300" sortable fixed
+				<el-table-column key="oldname" prop="oldname" label="旧文件名" min-width="300" sortable="custom" fixed
 					show-overflow-tooltip />
-				<el-table-column key="newname" prop="newname" label="新文件名" min-width="300" sortable fixed
-					show-overflow-tooltip>
+				<el-table-column key="pageNo" prop="pageNo" label="页码" width="50" align="center" fixed
+					show-overflow-tooltip />
+				<el-table-column key="newname" label="新文件名" min-width="300" sortable="custom" fixed show-overflow-tooltip>
 					<template #default="props">
 						{{ newName(props) }}
 					</template>
 				</el-table-column>
-				<el-table-column key="pageNo" prop="pageNo" label="页码" width="50" align="center" fixed
-					show-overflow-tooltip />
 				<el-table-column key="more" label="结果">
 					<el-table-column v-for="(item,) in tableHead" :key="item.id" :label="item.label"
 						:align="item.align ?? 'left'" :width="item.width ?? 150"
-						:show-overflow-tooltip="item.tooltip ?? true">
+						:show-overflow-tooltip="item.tooltip ?? true" sortable="custom">
 						<template #default="props">
 							{{ item.render(props) }}
 						</template>
 					</el-table-column>
 				</el-table-column>
 			</el-table>
-			<el-space alignment="center" :style="{ 'margin-top': '10px' }">
+			<el-space alignment="center" :style="{ 'margin-top': '5px' }">
 				<el-upload ref="uploadRef" action="#" multiple :auto-upload="true" :file-list="fileLists"
 					:show-file-list="false" :before-remove="beforeFilesRemove" :on-change="handleChange"
 					:http-request="uploadFilesXhr">
@@ -95,10 +95,10 @@
 		</el-tab-pane> -->
 		<el-tab-pane label="脚本设置" name="ScriptSetting">
 			<monacoEditor v-model="ScriptSetting.value" :language="ScriptSetting.language" :style="{ 'text-align': 'left' }"
-				:width="`${screenSize.width - 50}px`" :height="`${screenSize.height - 150}px`"
+				:width="`${screenSize.width - 50}px`" :height="`${screenSize.height - 110}px`"
 				v-bind:theme="ScriptSetting.theme" @editor-mounted="ScriptSetting.editorMounted"
 				@change="handleEditorChange" />
-			<el-space alignment="center" :style="{ 'margin-top': '10px' }">
+			<el-space alignment="center" :style="{ 'margin-top': '5px' }">
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.save" round>保存</el-button>
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.cancel" round>取消</el-button>
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.reset" round>重置</el-button>
@@ -107,26 +107,26 @@
 				<el-button type="primary" @click="ScriptSetting.btnFunctions.output" round>导出</el-button>
 			</el-space>
 		</el-tab-pane>
-		<div id="preview-cache"></div>
 	</el-tabs>
+	<div id="preview-cache"></div>
 </template>
 
 <script lang="ts">
 // import Tesseract from 'tesseract.js'
 import { ref } from 'vue'
-import { ElTable } from 'element-plus'
-import type { UploadRequestOptions } from 'element-plus'
+import { ElTable, UploadRequestOptions } from 'element-plus'
 
 import { saveAs } from 'file-saver'
 
 import * as monaco from 'monaco-editor'
 import monacoEditor from './monacoEditor.vue'
-import { ImgUtils, PDFUtils, cv } from '../utils/PDFUtils'
+import { PDFUtils } from '../utils/PDFUtils'
 import { OFDUtils, jq } from '../utils/OFDUtils'
 import JSZip from 'jszip'
 
 const fileUrl: any = {}
-var computedFields = {
+
+let computedFields = {
 	tableHead: () => {
 		return [
 			{
@@ -141,6 +141,14 @@ var computedFields = {
 	},
 	newName: (prop: any) => {
 		return prop.row.oldname
+	},
+	tableSort: ({ column, prop, order }: any) => {
+		let collator = new Intl.Collator('zh-Hans-CN', { numeric: true })
+		let key = column.rawColumnKey
+		let ascend = order == 'ascending' ? 1 : -1
+		this.tableData = this.tableData.sort((a: any, b: any) => {
+			return collator.compare(a[key], b[key]) * ascend
+		})
 	}
 }
 
@@ -160,12 +168,12 @@ export default {
 		if (window.utools != null) {
 			utools.onPluginEnter((param: any) => {
 				let { code, type, payload, option } = param
-				// console.log(param)
-				// console.log(code, type, payload, option)
 				if (type == 'files')
 					this.parseFiles(payload)
 			})
 		}
+
+
 
 		return {
 			screenSize: {
@@ -176,6 +184,7 @@ export default {
 			fileUrl: {},
 			tableHead: computedFields.tableHead(),
 			newName: computedFields.newName,
+			tableSort: computedFields.tableSort,
 			tableData: [{
 				pageNo: 0,
 				page: null,
@@ -212,6 +221,7 @@ export default {
 							eval(exportConfig)
 							this.tableHead = computedFields.tableHead()
 							this.newName = computedFields.newName
+							this.tableSort = computedFields.tableSort
 						}
 					},
 					save: () => {
@@ -366,27 +376,29 @@ export default {
 		},
 		async saveAsSubFiles() {
 			let selected = this.$refs.multipleTableRef.getSelectionRows()
+			selected = selected.length == 0 ? this.tableData : selected
 			if (selected.length > 0) {
 				let zip = new JSZip()
 				let files: any = {}
 				for (let i = 0; i < selected.length; i++) {
-					if (selected[i].oldname.endsWith('.pdf')) {
-						if (!(selected[i].path in files)) {
-							files[selected[i].path] = []
-							let docs = await PDFUtils.splitPDF(selected[i].path)
-
-							for (let pageNo = 0; pageNo < docs.length; pageNo++) {
-								files[selected[i].path].push({
-									blob: new Blob([await docs[pageNo].save()]),
-									name: this.newName({ row: selected[i + pageNo], column: this.tableHead, index: i })
+					let row = selected[i]
+					if (row.oldname.endsWith('.pdf')) {
+						if (!(row.path in files)) {
+							files[row.path] = []
+							let docs = await PDFUtils.splitPDF(row.path)
+							let selectedPages = selected.filter(v => v.path == row.path)
+							for (let pi = 0; pi < selectedPages.length; pi++) {
+								files[row.path].push({
+									blob: new Blob([await docs[selectedPages[pi].pageNo - 1].save()]),
+									name: this.newName({ row: selectedPages[pi], column: this.tableHead, index: i + pi })
 								})
 							}
 						}
 					} else {
-						if (!(selected[i].path in files)) {
-							files[selected[i].path] = [{
-								blob: await new Promise(resolve => selected[i].element.canvas.toBlob(resolve)),
-								name: this.newName({ row: selected[i], column: this.tableHead, index: i }).replace(/[^\.]+$/, 'png')
+						if (!(row.path in files)) {
+							files[row.path] = [{
+								blob: await new Promise(resolve => row.element.canvas.toBlob(resolve)),
+								name: this.newName({ row: row, column: this.tableHead, index: i }).replace(/[^\.]+$/, 'png')
 							}]
 						}
 					}
@@ -400,21 +412,29 @@ export default {
 		},
 		saveAsFiles() {
 			let selected = this.$refs.multipleTableRef.getSelectionRows()
-			console.log(selected)
+			selected = selected.length == 0 ? this.tableData : selected
 			if (selected.length > 0) {
-				PDFUtils.merge(selected.map((v: any) => {
-					if (v.oldname.endsWith('.pdf'))
-						return {
-							url: v.path,
-							type: 'pdf'
-						}
-					else
-						return {
-							url: v.element.canvas.toDataURL(),
-							type: 'image',
-							scale: 0.5
-						}
-				})).then(async doc => {
+				let filespath = new Set()
+				let files = []
+				for (let i = 0; i < selected.length; i++) {
+					let row = selected[i]
+					if (!filespath.has(row.path)) {
+						filespath.add(row.path)
+						if (row.oldname.endsWith('.pdf'))
+							files.push({
+								url: row.path,
+								type: 'pdf',
+								pageNos: new Set(selected.filter(v => v.path == row.path).map(v => v.pageNo - 1))
+							})
+						else
+							files.push({
+								url: row.element.canvas.toDataURL(),
+								type: 'image',
+								scale: 0.5
+							})
+					}
+				}
+				PDFUtils.merge(files).then(async doc => {
 					let bytes = await doc.save()
 					saveAs(new Blob([bytes]), 'merge.pdf')
 				})
@@ -447,17 +467,19 @@ export default {
 				return row
 			})
 		},
-		getSum(param: any) {
-			const { columns } = param
+		tableSummary(param: any) {
+			const { columns, data } = param
 			const sums: any[] = []
+
 			columns.forEach((column: any, index: number) => {
+				let selected: any[] = this.$refs.multipleTableRef.getSelectionRows()
 				if (index === 2) {
-					sums[index] = `合计 (选中${this.$refs.multipleTableRef.getSelectionRows().length}行/共${this.tableData.length}行)`
+					sums[index] = `合计 (选中${selected.length}行/共${this.tableData.length}行)`
 					return
 				}
 				let total: any = this.tableHead.find(v => v.id == column.rawColumnKey)?.total
 				if (total) {
-					sums[index] = total(param)
+					sums[index] = total(selected.length == 0 ? param : { columns: columns, data: selected })
 				}
 			})
 			return sums

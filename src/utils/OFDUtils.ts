@@ -17,21 +17,24 @@ class OFDUtils {
 		this.arraybuffer = arraybuffer
 		let zip = new JSZIP()
 		this.raw = zip.loadAsync(arraybuffer)
+		this.docInfo = {}
+		this.tags = {}
+		this.pages = []
 	}
 
 	then(resolve: any = (v: OFDUtils) => v) {
-		const fun = async () => {
+		const loadxml = async () => {
 			this.ofd = await this.parseXml('OFD.xml')
 			this.docInfo = this.parseDocInfo(this.ofd)
 
-			let docRoot = this.ofd.getElementsByTagName('ofd:DocRoot')[0].textContent
+			let docRoot = this.ofd.getElementsByTagName('ofd:DocRoot')[0]?.textContent
 
 			if (docRoot) {
 				let rootDir = docRoot.replace(/[^\/]+$/g, '')
 				let pages, tags
 				let root = await this.parseXml(docRoot)
 
-				let tags_path = root.getElementsByTagName('ofd:CustomTags')[0].textContent
+				let tags_path = root.getElementsByTagName('ofd:CustomTags')[0]?.textContent
 				if (tags_path) {
 					let tags_xml = await this.parseXml(rootDir + tags_path)
 					let tags_dir = rootDir + tags_path?.replace(/[^\/]+$/g, '')
@@ -47,14 +50,17 @@ class OFDUtils {
 			ofdjs.parseOfdDocument({
 				ofd: this.arraybuffer,
 				success: async (res: any) => {
-					let screenWidth = 900
-					let scale = 2
-					let ofdRenderRes = ofdjs.renderOfd(screenWidth * scale, res[0])
+					let screenWidth = 21.5 / 2.54 * 72 *2
+					let ofdRenderRes = ofdjs.renderOfdByScale(res[0])
 					var div = document.getElementById('preview-cache')
-					for (var i = 0; i < ofdRenderRes.length; i++) {
+					for (let i = 0; i < ofdRenderRes.length; i++) {
 						div.innerHTML = ''
 						div.appendChild(ofdRenderRes[i])
-						await htmlToImage.toCanvas(ofdRenderRes[i])
+						let styles = ofdRenderRes[i].getAttribute('style').split(';')
+						let width = parseFloat(styles.find(v => /^width/.test(v)).replace(/[^\d]/g, ''))
+						let height = parseFloat(styles.find(v => /^height/.test(v)).replace(/[^\d]/g, ''))
+						let scale = screenWidth / width
+						await htmlToImage.toCanvas(ofdRenderRes[i], { canvasWidth: screenWidth, canvasHeight: height * scale })
 							.then((canvas) => {
 								this.pages[i].element = {
 									canvas: canvas,
@@ -72,7 +78,7 @@ class OFDUtils {
 				}
 			})
 		}
-		fun()
+		loadxml()
 	}
 
 	async parseXml(path: string) {

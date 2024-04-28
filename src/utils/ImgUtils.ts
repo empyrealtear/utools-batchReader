@@ -42,6 +42,8 @@ class ImgUtils {
 	}
 	static toCanvas(mat: cv.Mat, isDelete = false) {
 		let canvas = document.createElement('canvas')
+		let context = canvas.getContext('2d')
+		context.imageSmoothingEnabled = true
 		cv.imshow(canvas, mat)
 		if (isDelete)
 			mat.delete()

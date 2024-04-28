@@ -3,9 +3,9 @@
 	"main": "index.html",
 	"preload": "preload.js",
 	"name": "batchReader",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"pluginName": "票据小助手",
-	"description": "识别PDF电子票据，并提取内容",
+	"description": "识别PDF电子票据, 并提取内容",
 	"author": "empyrealtear",
 	"homepage": "https://github.com/empyrealtear",
 	"features": [

@@ -3,9 +3,9 @@
  */
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "74fdd260-5049-4978-bb3c-807dc9e9643f",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "batchReader",
   "icon":"public/logo.ico",
   "directories": {
     "output": "release/${version}"
@@ -22,12 +22,13 @@
   },
   "win": {
     "target": [
-      {
-        "target": "nsis",
-        "arch": [
-          "x64"
-        ]
-      }
+      // {
+      //   "target": "nsis",
+      //   "arch": [
+      //     "x64"
+      //   ]
+      // }
+      "portable"
     ],
     "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
   },
