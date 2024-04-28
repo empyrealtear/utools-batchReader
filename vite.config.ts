@@ -16,7 +16,7 @@ export default defineConfig(({ command, mode }) => {
 	const isStartElectron = mode === 'electron'
 	const sourcemap = isServe || !!process.env.VSCODE_DEBUG
 	return {
-		base: './',
+		base: '/utools-batchReader/',
 		optimizeDeps: {
 			include: [
 				`monaco-editor/esm/vs/language/json/json.worker`,
@@ -103,5 +103,8 @@ export default defineConfig(({ command, mode }) => {
 			host: pkg.env.VITE_DEV_SERVER_HOST,
 			port: pkg.env.VITE_DEV_SERVER_PORT,
 		},
+		build: {
+			outDir: 'docs'
+		}
 	}
 })

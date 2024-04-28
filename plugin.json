@@ -7,7 +7,7 @@
 	"pluginName": "票据小助手",
 	"description": "识别PDF电子票据, 并提取内容",
 	"author": "empyrealtear",
-	"homepage": "https://github.com/empyrealtear",
+	"homepage": "https://github.com/empyrealtear/utools-batchReader",
 	"features": [
 		{
 			"code": "main",
