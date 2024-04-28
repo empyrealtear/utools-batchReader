@@ -11,7 +11,7 @@ computedFields = {
         let getAmount = (row) => {
             switch (row.type) {
                 case 'pdf': {
-                    let match = row._cells.find((v) => /.小写.\s*[¥￥]\s*([0-9.]+)$|[¥￥]\s*([0-9.]+)\s*.小写.$/g.test((v.value ?? '').trim()))
+                    let match = row._cells.find((v) => /.小写.\s*[¥￥]\s*(\-?[0-9.]+)$|[¥￥]\s*(\-?[0-9.]+)\s*.小写.$/g.test((v.value ?? '').trim()))
                     return parseFloat(match?.value?.replace(/[^-0-9.]+/g, ''))
                 }
                 case 'ofd': return parseFloat(row._cells.find((v) => v.label == 'TaxInclusiveTotalAmount' && v.value != '¥')?.value)
@@ -27,7 +27,7 @@ computedFields = {
                 width: 150,
                 render: (props) => {
                     switch (props.row.type) {
-                        case 'pdf': return /发票代码\s*[:：]\s*(?<id>[0-9]+)/g.exec(props.row._text.value)?.groups?.id
+                        case 'pdf': return /发\s*票\s*代\s*码\s*[:：]\s*(?<id>[0-9]+)/g.exec(props.row._text.value)?.groups?.id
                         case 'ofd': return props.row._cells.find((v) => v.label == 'InvoiceCode')?.value
                         default: null
                     }
@@ -40,7 +40,7 @@ computedFields = {
                 width: 200,
                 render: (props) => {
                     switch (props.row.type) {
-                        case 'pdf': return /发票号码\s*[:：]\s*(?<id>[0-9]+)/g.exec(props.row._text.value)?.groups?.id
+                        case 'pdf': return /发\s*票\s*号\s*码\s*[:：]\s*(?<id>[0-9]+)/g.exec(props.row._text.value)?.groups?.id
                         case 'ofd': return props.row._cells.find((v) => v.label == 'InvoiceNo')?.value
                         default: return null
                     }
@@ -53,7 +53,7 @@ computedFields = {
                 width: 120,
                 render: (props) => {
                     switch (props.row.type) {
-                        case 'pdf': return /开票日期\s*[:：]\s*(?<id>\d{4}(年|\s+)\d{1,2}(月|\s+)\d{1,2})/g.exec(props.row._text.value)?.groups?.id?.replace(/[^\d]+/g, '-')
+                        case 'pdf': return /开\s*票\s*日\s*期\s*[:：]\s*(?<id>\d{4}(\s*年\s*|\s+)\d{1,2}(\s*月\s*|\s+)\d{1,2})/g.exec(props.row._text.value)?.groups?.id?.replace(/[^\d]+/g, '-')
                         case 'ofd': return props.row._cells.find((v) => v.label == 'IssueDate')?.value?.replace(/[^\d]+/g, '-').replace(/-$/g, '')
                         default: return null
                     }
@@ -129,7 +129,19 @@ computedFields = {
                 label: '购方账号',
                 render: (props) => {
                     switch (props.row.type) {
-                        case 'pdf': return companyInfo(props.row, 1, (v) => /^购\n?买.*/g.test(v.value ?? ''), (v) => /开户行.*[:：]/g.test(v))
+                        case 'pdf': {
+                            let index = props.row._cells.findIndex((v) => /^购\n?买.*/g.test(v.value ?? ''))
+                            let texts = props.row._cells[index + 1]?.texts
+                            if (index != -1) {
+                                let ranges = Object.entries(texts ?? {}).map(([, v]) => v.map((x) => x.str.trim()).join(''))
+                                let start = ranges.findIndex((v) => /地.*址.*[:：]/g.test(v))
+                                let end = ranges.findIndex((v) => /开\s*户\s*行.*[:：]/g.test(v))
+                                if (end != -1 && start != -1) {
+                                    return ranges?.filter((v, i) => i > start && i <= end).join('')?.replace(/开\s*户\s*行.*[:：]/g, '')
+                                }
+                            }
+                            return ''
+                        }
                         case 'ofd': return props.row._cells.find((v) => v.label == 'BuyerFinancialAccount')?.value
                         default: return null
                     }
@@ -190,9 +202,9 @@ computedFields = {
                             if (index != -1) {
                                 let ranges = Object.entries(texts ?? {}).map(([, v]) => v.map((x) => x.str.trim()).join(''))
                                 let start = ranges.findIndex((v) => /地.*址.*[:：]/g.test(v))
-                                let end = ranges.findIndex((v) => /开户行.*[:：]/g.test(v))
+                                let end = ranges.findIndex((v) => /开\s*户\s*行.*[:：]/g.test(v))
                                 if (end != -1 && start != -1) {
-                                    return ranges?.filter((v, i) => i > start && i <= end).join('')?.replace(/开户行.*[:：]/g, '')
+                                    return ranges?.filter((v, i) => i > start && i <= end).join('')?.replace(/开\s*户\s*行.*[:：]/g, '')
                                 }
                             }
                             return ''
